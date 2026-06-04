@@ -29,9 +29,14 @@ export const THEMES = {
                             inputBg: '#2f2f2f' } },
   claude:     { bg:'#262624', fg:'#f5f4f0', panel:'#30302e', border:'#4a4a47', red:'#c6613f' },
   cute:       { bg:'#fff0f5', fg:'#d4608a', panel:'#fff8fa', border:'#f0c0d0', red:'#ff6b9d' },
+  workdaddy:  { bg:'#181816', fg:'#F9EBDC', panel:'#235E36', border:'#FAAFCC', red:'#A8E10C',
+                advanced: { brandColor: '#FAAFCC',
+                            sendBtnBg: '#235E36', sendBtnHover: '#1a4527',
+                            userBubbleBg: '#235E36', aiBubbleBg: '#1a1a1a',
+                            inputBg: '#2a2a28' } },
 };
 
-const DEFAULT_THEME = 'dark';
+const DEFAULT_THEME = 'workdaddy';
 const LS_KEY = 'odysseus-theme';
 const CUSTOM_THEMES_KEY = 'odysseus-custom-themes';
 
@@ -58,6 +63,7 @@ const THEME_DEFAULT_PATTERN = {
   organs:     'rain',
   ume:        'petals',
   cute:       'sparkles',
+  workdaddy:  'none',
 };
 
 // Default effect colors for specific themes (overrides --fg)
@@ -66,6 +72,7 @@ const THEME_DEFAULT_EFFECT_COLOR = {
   organs:     '#451616',
   cute:       '#ff8cb8',
   ume:        '#f5a0c0',
+  workdaddy:  '#FAAFCC',
 };
 
 // Default effect intensity (0..1) per theme. Any theme not listed defaults to 1.
