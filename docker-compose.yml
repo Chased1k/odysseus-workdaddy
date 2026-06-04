@@ -16,6 +16,12 @@ services:
       # land under /app/.local for the odysseus user. Persist them so a
       # container recreate does not silently remove installed serve engines.
       - ./data/local:/app/.local:z
+      # Whisper.cpp models mounted from host
+      - ~/.openclaw/models:/app/models:ro
+      # Whisper.cpp binary (symlink or mount)
+      - /usr/local/bin/whisper-cli:/usr/local/bin/whisper-cli:ro
+      - WHISPER_MODELS_DIR=/app/models
+      - WHISPER_CLI=/usr/local/bin/whisper-cli
     extra_hosts:
       # Lets the container reach local services on the Docker host, including
       # Ollama at http://host.docker.internal:11434.
