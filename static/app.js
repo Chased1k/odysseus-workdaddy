@@ -40,6 +40,8 @@ import groupModule from './js/group.js';
 import * as researchPanelModule from './js/research/panel.js';
 import ttsModule from './js/tts-ai.js';
 import spinnerModule from './js/spinner.js';
+import agentDashboardModule from './js/agent-dashboard.js';
+import taskBoardModule from './js/task-board.js';
 import { initKeyboardShortcuts } from './js/keyboard-shortcuts.js';
 import { initSidebarLayout, syncRailSide } from './js/sidebar-layout.js';
 import { initSectionCollapse, initSectionDrag } from './js/section-management.js';
@@ -50,6 +52,8 @@ window.sessionModule = sessionModule;
 window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
+window.agentDashboardModule = agentDashboardModule;
+window.taskBoardModule = taskBoardModule;
 
 // Redirect to login on 401 from any fetch
 const _origFetch = window.fetch;
@@ -874,15 +878,29 @@ function initializeEventListeners() {
     });
   }
 
-  // Tasks tool button
-  const toolTasksBtn = el('tool-tasks-btn');
-  if (toolTasksBtn) {
-  // Agents buttons (sidebar + rail)
+  // Agent Dashboard buttons (sidebar + rail)
   const agentsBtns = [el("rail-agents"), el("tool-agents-btn")].filter(Boolean);
   agentsBtns.forEach(btn => {
     btn.addEventListener("click", () => {
+      if (agentDashboardModule) {
+        agentDashboardModule.isAgentDashboardOpen() ? agentDashboardModule.closeAgentDashboard() : agentDashboardModule.openAgentDashboard();
+      }
     });
   });
+
+  // Task Board button (sidebar)
+  const toolTaskBoardBtn = el('tool-task-board-btn');
+  if (toolTaskBoardBtn) {
+    toolTaskBoardBtn.addEventListener('click', () => {
+      if (taskBoardModule) {
+        taskBoardModule.isTaskBoardOpen() ? taskBoardModule.closeTaskBoard() : taskBoardModule.openTaskBoard();
+      }
+    });
+  }
+
+  // Tasks tool button (Odysseus built-in scheduled prompts)
+  const toolTasksBtn = el('tool-tasks-btn');
+  if (toolTasksBtn) {
     toolTasksBtn.addEventListener('click', () => {
       if (tasksModule) {
         tasksModule.isTasksOpen() ? tasksModule.closeTasks() : tasksModule.openTasks();
@@ -1042,6 +1060,8 @@ function initializeEventListeners() {
     '/memory':   () => document.getElementById('tool-memory-btn')?.click(),
     '/gallery':  () => document.getElementById('tool-gallery-btn')?.click(),
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
+    '/agents':   () => document.getElementById('tool-agents-btn')?.click(),
+    '/taskboard': () => document.getElementById('tool-task-board-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
   };
   const _opener = _routeOpen[urlPath];
@@ -3463,6 +3483,7 @@ function startOdysseusApp() {
     'rail-archive':   'tool-library-btn',
     'rail-gallery':   'tool-gallery-btn',
     'rail-tasks':     'tool-tasks-btn',
+    'rail-agents':    'tool-agents-btn',
     'rail-calendar':  'tool-calendar-btn',
     'rail-notes':     'tool-notes-btn',
     'rail-memory':    'tool-memory-btn',

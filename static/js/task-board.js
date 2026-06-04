@@ -1,322 +1,160 @@
 /**
- * Task Board — Kanban view with Linear API integration
- * Fetches real Linear issues and maps them to Kanban columns.
+ * Task Board — Kanban board with Linear API integration
+ * Follows Odysseus modal pattern (see tasks.js)
  */
 
-const COLUMNS = [
-  { id: 'todo',        label: 'Todo' },
-  { id: 'in-progress', label: 'In Progress' },
-  { id: 'review',      label: 'Review' },
-  { id: 'done',        label: 'Done' },
-];
+import { makeWindowDraggable } from './windowDrag.js';
 
-// Tasks loaded from Linear API
-let tasks = [];
-let filterAssignee = '';
-let dragSrcEl = null;
+const API_BASE = window.location.origin;
+let _open = false;
+let _tasks = [];
+let _tasksFetched = false;
+let _escHandler = null;
 
-const $board      = document.getElementById('board');
-const $filter     = document.getElementById('filter-assignee');
-const $btnAdd     = document.getElementById('btn-add-task');
-const $modal      = document.getElementById('task-modal');
-const $modalTitle = document.getElementById('modal-title');
-const $tTitle     = document.getElementById('t-title');
-const $tDesc      = document.getElementById('t-desc');
-const $tAssignee  = document.getElementById('t-assignee');
-const $tPriority  = document.getElementById('t-priority');
-const $tStatus    = document.getElementById('t-status');
-const $tDue       = document.getElementById('t-due');
-const $btnSave    = document.getElementById('modal-save');
-const $btnCancel  = document.getElementById('modal-cancel');
+const COLUMNS = ['Backlog', 'In Progress', 'Review', 'Done'];
 
-let editingId = null;
-
-// ================== LINEAR API ==================
-
-async function loadLinearIssues(team = 'TEA') {
-  try {
-    const statusEl = document.getElementById('linear-status');
-    if (statusEl) statusEl.textContent = '● Linear: Loading...';
-    
-    const resp = await fetch(`/api/linear/issues?team=${team}&limit=50`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    
-    const data = await resp.json();
-    tasks = data.issues || [];
-    
-    if (statusEl) statusEl.textContent = `● Linear: ${tasks.length} tasks`;
-    
-    // Populate assignee filter
-    populateAssigneeFilter();
-    
-    renderBoard();
-  } catch (err) {
-    console.error('Linear API error:', err);
-    const statusEl = document.getElementById('linear-status');
-    if (statusEl) {
-      statusEl.textContent = '● Linear: Error';
-      statusEl.style.color = '#ff4d4d';
-    }
-    // Fallback to mock data if API fails
-    tasks = getMockTasks();
-    renderBoard();
-  }
-}
-
-function populateAssigneeFilter() {
-  const filter = document.getElementById('filter-assignee');
-  if (!filter) return;
-  
-  // Get unique assignees
-  const assignees = [...new Set(tasks.map(t => t.assignee).filter(Boolean))].sort();
-  
-  // Save current selection
-  const current = filter.value;
-  
-  // Rebuild options
-  filter.innerHTML = '<option value="">All assignees</option>';
-  assignees.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a;
-    opt.textContent = a;
-    filter.appendChild(opt);
-  });
-  
-  // Restore selection if still valid
-  if (current && assignees.includes(current)) {
-    filter.value = current;
-  }
-}
-
-function getMockTasks() {
+// Phase 1: mock fallback if API unreachable
+function _mockTasks() {
   return [
-    { id: 'WD-101', title: 'Design landing hero section',     assignee: 'Chiron',   priority: 'High',   column: 'todo',       due_date: '2026-06-06', description: '', labels: [] },
-    { id: 'WD-102', title: 'Set up Qdrant vector DB',           assignee: 'Chiron',   priority: 'Medium', column: 'in-progress', due_date: '2026-06-05', description: '', labels: [] },
-    { id: 'WD-103', title: 'Build OAuth flow for Gmail',        assignee: 'Hermes',   priority: 'High',   column: 'review',     due_date: '2026-06-04', description: '', labels: [] },
-    { id: 'WD-104', title: 'Fix mobile nav z-index bug',        assignee: 'Hermes',   priority: 'Low',    column: 'done',       due_date: '2026-06-01', description: '', labels: [] },
-    { id: 'WD-105', title: 'Write Playwright E2E tests',        assignee: 'Chiron',   priority: 'Medium', column: 'todo',       due_date: '2026-06-08', description: '', labels: [] },
-    { id: 'WD-106', title: 'Linear API schema mapping',         assignee: 'Chiron',   priority: 'Low',    column: 'in-progress', due_date: '2026-06-10', description: '', labels: [] },
-    { id: 'WD-107', title: 'Dark-mode toggle persistence',      assignee: 'Hermes',   priority: 'Medium', column: 'review',     due_date: '2026-06-03', description: '', labels: [] },
-    { id: 'WD-108', title: 'Onboarding tooltip tour',           assignee: 'Hermes',   priority: 'Low',    column: 'todo',       due_date: '2026-06-12', description: '', labels: [] },
+    { id:'TEA-66', title:'Fix Ollama 8K output cap', state:'Done', priority:2, assignee:'Chiron', due:'2026-04-13' },
+    { id:'TEA-67', title:'PR to openclaw for max_tokens fix', state:'In Progress', priority:3, assignee:'Chiron', due:'2026-04-20' },
+    { id:'TEA-73', title:'Brain dump research: TDAB', state:'Backlog', priority:1, assignee:null, due:null },
+    { id:'TEA-82', title:'Build Hephaestus CTO agent workspace', state:'In Progress', priority:2, assignee:'Fabio', due:'2026-05-01' },
+    { id:'WD-54', title:'Fabio OAuth Gmail setup', state:'Done', priority:2, assignee:'Fabio', due:'2026-04-29' },
+    { id:'WD-55', title:'Fabio Email Responder skill', state:'In Progress', priority:3, assignee:'Fabio', due:'2026-05-05' },
+    { id:'WD-58', title:'Move Perri off Telegram', state:'Backlog', priority:1, assignee:null, due:null },
+    { id:'TEA-43', title:'Permission Studios storage build', state:'Review', priority:2, assignee:'Hermes', due:'2026-04-15' }
   ];
 }
 
-// ================== RENDERING ==================
-
-function renderBoard() {
-  if (!$board) return;
-  $board.innerHTML = '';
-
-  COLUMNS.forEach(col => {
-    const colTasks = tasks.filter(t => (t.column || t.status) === col.id);
-    
-    const $col = document.createElement('div');
-    $col.className = 'task-column';
-    $col.dataset.column = col.id;
-    $col.innerHTML = `
-      <div class="task-column-header">
-        ${col.label}
-        <span class="count">${colTasks.length}</span>
-      </div>
-      <div class="task-column-body" data-column="${col.id}">
-        ${colTasks.map(t => taskCard(t)).join('')}
-      </div>
-    `;
-    
-    // Drop handlers
-    const dropzone = $col.querySelector('.task-column-body');
-    dropzone.addEventListener('dragover', handleDragOver);
-    dropzone.addEventListener('drop', handleDrop);
-    dropzone.addEventListener('dragenter', handleDragEnter);
-    dropzone.addEventListener('dragleave', handleDragLeave);
-    
-    $board.appendChild($col);
-  });
-
-  // Re-attach drag handlers to cards
-  document.querySelectorAll('.task-card').forEach(card => {
-    card.addEventListener('dragstart', handleDragStart);
-    card.addEventListener('dragend', handleDragEnd);
-    card.addEventListener('click', () => openEditModal(card.dataset.id));
-  });
+async function _fetchTasks() {
+  try {
+    const res = await fetch(`${API_BASE}/api/linear/issues`, { credentials:'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    _tasks = data.issues || data.tasks || [];
+  } catch (e) {
+    console.warn('Linear fetch failed, using mock:', e.message);
+    _tasks = _mockTasks();
+  }
+  _tasksFetched = true;
 }
 
-function taskCard(t) {
-  const priorityClass = {
-    'Critical': 'priority-critical',
-    'Urgent': 'priority-urgent',
-    'High': 'priority-high',
-    'Medium': 'priority-medium',
-    'Low': 'priority-low',
-  }[t.priority] || 'priority-low';
+function _esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
-  const assignee = t.assignee || 'Unassigned';
-  const due = t.due_date ? formatDate(t.due_date) : '';
-  const labels = (t.labels || []).map(l => `<span class="task-label">${l}</span>`).join('');
-  
-  return `
-    <div class="task-card ${priorityClass}" draggable="true" data-id="${t.id}">
-      <div class="task-priority-bar"></div>
-      <div class="task-id">${t.id}</div>
-      <div class="task-title">${escapeHtml(t.title)}</div>
-      <div class="task-meta">
-        <span class="task-assignee">${assignee}</span>
-        ${due ? `<span class="task-due">${due}</span>` : ''}
+function _render() {
+  const body = document.getElementById('task-board-body');
+  if (!body) return;
+  if (!_tasksFetched) { body.innerHTML='<div style="opacity:0.4;font-size:12px;text-align:center;padding:40px 0;">Loading tasks...</div>'; return; }
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:10px;overflow-x:auto;padding:8px;height:100%;';
+
+  for (const col of COLUMNS) {
+    const colTasks = _tasks.filter(t => t.state===col || t.column===col);
+    const colDiv = document.createElement('div');
+    colDiv.style.cssText = 'flex:1;min-width:220px;max-width:320px;display:flex;flex-direction:column;gap:8px;';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.6;padding:0 4px 4px;display:flex;align-items:center;gap:6px;';
+    hdr.innerHTML = `${col} <span style="background:var(--bg);padding:2px 6px;border-radius:10px;font-size:10px;">${colTasks.length}</span>`;
+    colDiv.appendChild(hdr);
+
+    const dz = document.createElement('div');
+    dz.style.cssText = 'flex:1;min-height:100px;background:var(--bg);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:6px;transition:background 0.2s;';
+    dz.dataset.column = col;
+
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.opacity='0.7'; });
+    dz.addEventListener('dragleave', () => { dz.style.opacity='1'; });
+    dz.addEventListener('drop', (e) => { e.preventDefault(); dz.style.opacity='1'; _moveTask(e.dataTransfer.getData('text/plain'), col); });
+
+    for (const t of colTasks) {
+      const pc = t.priority>=3 ? '#F9EBDC' : t.priority===2 ? '#A8E10C' : '#B2EAEA';
+      const card = document.createElement('div');
+      card.draggable = true;
+      card.style.cssText = 'background:var(--panel-bg,#1A1A1A);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:grab;font-size:12px;';
+      card.dataset.id = t.id || t.identifier;
+      card.innerHTML = `
+        <div style="display:flex;align-items:start;gap:6px;margin-bottom:6px;">
+          <span style="font-family:monospace;font-size:10px;opacity:0.5;flex-shrink:0;">${_esc(t.id||t.identifier||'')}</span>
+          <span style="width:6px;height:6px;border-radius:50%;background:${pc};flex-shrink:0;margin-top:4px;"></span>
+        </div>
+        <div style="font-weight:500;margin-bottom:6px;line-height:1.4;">${_esc(t.title||t.name||'')}</div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:10px;opacity:0.6;">
+          <span>👤 ${_esc(t.assignee||'Unassigned')}</span>
+          ${t.due ? `<span>📅 ${t.due}</span>` : ''}
+        </div>
+      `;
+      card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', card.dataset.id); card.style.opacity='0.5'; });
+      card.addEventListener('dragend', () => { card.style.opacity='1'; });
+      dz.appendChild(card);
+    }
+
+    colDiv.appendChild(dz);
+    wrap.appendChild(colDiv);
+  }
+
+  body.innerHTML = '';
+  body.appendChild(wrap);
+}
+
+async function _moveTask(taskId, newState) {
+  const t = _tasks.find(x => (x.id||x.identifier)===taskId);
+  if (!t) return;
+  t.state = newState; t.column = newState;
+  _render();
+  try {
+    await fetch(`${API_BASE}/api/linear/issues/${taskId}/state`, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:newState}) });
+  } catch (e) { console.warn('Linear sync failed:', e); }
+}
+
+export function openTaskBoard() {
+  if (_open) return;
+  _open = true;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'task-board-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="width:900px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;">
+      <div class="modal-header">
+        <h4 style="position:relative;top:-2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>Task Board</h4>
+        <span style="flex:1"></span>
+        <span id="task-board-status" style="font-size:11px;opacity:0.6;margin-right:12px;">● Linear</span>
+        <button class="close-btn" id="task-board-close">✖</button>
       </div>
-      ${labels ? `<div class="task-labels">${labels}</div>` : ''}
+      <div class="modal-body" id="task-board-body" style="flex:1;overflow:auto;"></div>
     </div>
   `;
-}
+  document.body.appendChild(modal);
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+  { const c=modal.querySelector('.modal-content'), h=modal.querySelector('.modal-header'); if(c&&h) makeWindowDraggable(modal,{content:c,header:h}); }
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+  document.getElementById('task-board-close').addEventListener('click', closeTaskBoard);
+  modal.addEventListener('click', (e) => { if(e.target===modal) closeTaskBoard(); });
 
-// ================== DRAG & DROP ==================
+  _escHandler = (e) => { if(e.key==='Escape') closeTaskBoard(); };
+  document.addEventListener('keydown', _escHandler);
 
-function handleDragStart(e) {
-  dragSrcEl = this;
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', this.dataset.id);
-  this.classList.add('dragging');
-}
-
-function handleDragEnd(e) {
-  this.classList.remove('dragging');
-  document.querySelectorAll('.kanban-dropzone').forEach(z => z.classList.remove('drag-over'));
-}
-
-function handleDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-}
-
-function handleDragEnter(e) {
-  e.preventDefault();
-  this.classList.add('drag-over');
-}
-
-function handleDragLeave(e) {
-  this.classList.remove('drag-over');
-}
-
-async function handleDrop(e) {
-  e.preventDefault();
-  this.classList.remove('drag-over');
-  
-  const taskId = e.dataTransfer.getData('text/plain');
-  const newColumn = this.dataset.column;
-  
-  const task = tasks.find(t => t.id === taskId);
-  if (!task || task.column === newColumn) return;
-  
-  // Update local state
-  task.column = newColumn;
-  task.status = newColumn;
-  
-  // Try to update Linear via API
-  if (task.linear_id) {
-    try {
-      await fetch(`/api/linear/issues/${task.linear_id}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: newColumn })
-      });
-    } catch (err) {
-      console.error('Failed to update Linear state:', err);
+  _fetchTasks().then(() => {
+    _render();
+    const s = document.getElementById('task-board-status');
+    if (s && _tasks.length>0 && _tasks[0].id && !_tasks[0].id.startsWith('TEA-')) {
+      s.textContent = '● Linear Live'; s.style.color = '#A8E10C';
     }
-  }
-  
-  renderBoard();
-}
-
-// ================== MODAL ==================
-
-function openAddModal() {
-  editingId = null;
-  $modalTitle.textContent = 'Add Task';
-  $tTitle.value = '';
-  $tDesc.value = '';
-  $tAssignee.value = '';
-  $tPriority.value = 'medium';
-  $tStatus.value = 'todo';
-  $tDue.value = '';
-  $modal.style.display = 'block';
-}
-
-function openEditModal(id) {
-  const t = tasks.find(x => x.id === id);
-  if (!t) return;
-  
-  editingId = id;
-  $modalTitle.textContent = 'Edit Task';
-  $tTitle.value = t.title;
-  $tDesc.value = t.description || '';
-  $tAssignee.value = t.assignee || '';
-  $tPriority.value = (t.priority || 'medium').toLowerCase();
-  $tStatus.value = t.column || t.status || 'todo';
-  $tDue.value = t.due_date || '';
-  $modal.style.display = 'block';
-}
-
-function closeModal() {
-  $modal.style.display = 'none';
-  editingId = null;
-}
-
-function saveTask() {
-  const taskData = {
-    title: $tTitle.value.trim(),
-    description: $tDesc.value.trim(),
-    assignee: $tAssignee.value.trim(),
-    priority: $tPriority.value,
-    column: $tStatus.value,
-    status: $tStatus.value,
-    due_date: $tDue.value,
-  };
-  
-  if (!taskData.title) return;
-  
-  if (editingId) {
-    const t = tasks.find(x => x.id === editingId);
-    if (t) Object.assign(t, taskData);
-  } else {
-    const newId = `WD-${100 + tasks.length + 1}`;
-    tasks.push({ id: newId, ...taskData, labels: [] });
-  }
-  
-  closeModal();
-  renderBoard();
-}
-
-// ================== EVENTS ==================
-
-if ($filter) {
-  $filter.addEventListener('change', () => {
-    filterAssignee = $filter.value;
-    renderBoard();
   });
 }
 
-if ($btnAdd)     $btnAdd.addEventListener('click', openAddModal);
-if ($btnSave)    $btnSave.addEventListener('click', saveTask);
-if ($btnCancel)  $btnCancel.addEventListener('click', closeModal);
-
-// Close modal on outside click
-if ($modal) {
-  $modal.addEventListener('click', (e) => {
-    if (e.target === $modal) closeModal();
-  });
+export function closeTaskBoard() {
+  if (!_open) return;
+  _open = false;
+  if (_escHandler) { document.removeEventListener('keydown', _escHandler); _escHandler=null; }
+  const modal = document.getElementById('task-board-modal');
+  if (modal) {
+    const c = modal.querySelector('.modal-content');
+    if (c) { c.classList.add('modal-closing'); c.addEventListener('animationend',()=>modal.remove(),{once:true}); setTimeout(()=>{if(modal.parentElement)modal.remove();},250); }
+    else modal.remove();
+  }
 }
 
-// ================== INIT ==================
-
-// Load real Linear data on page load
-loadLinearIssues('TEA');
+export function isTaskBoardOpen() { return _open; }

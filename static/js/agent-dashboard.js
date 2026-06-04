@@ -1,308 +1,110 @@
 /**
- * Agent Dashboard — Odysseus
- * Real-time agent status cards with mock data (backend-ready)
+ * Agent Dashboard — floating modal showing agent status cards
+ * Follows Odysseus modal pattern (see tasks.js)
  */
 
-// ── Mock Data ───────────────────────────────────────────────────────────
-const MOCK_AGENTS = [
-  {
-    id: 'chiron',
-    name: 'Chiron',
-    initials: 'CH',
-    role: 'Main Orchestrator',
-    status: 'online',
-    model: 'kimi-k2.6',
-    modelDisplay: 'Kimi K2.6',
-    lastActive: new Date(Date.now() - 2 * 60 * 1000), // 2 min ago
-    recentActions: [
-      { icon: '💬', text: 'Processed chat message', time: '2m ago' },
-      { icon: '📅', text: 'Checked calendar events', time: '5m ago' },
-      { icon: '📧', text: 'Scanned inbox (3 unread)', time: '12m ago' },
-      { icon: '🔧', text: 'Executed shell command', time: '18m ago' },
-    ],
-    stats: {
-      totalActions: 1247,
-      uptime: '4d 12h',
-      tokensUsed: '2.4M',
-    },
-    activity: [30, 45, 60, 80, 55, 40, 70, 90, 65, 50, 75, 85, 40, 60, 70, 55, 80, 95, 60, 45, 70, 85, 50, 65],
-  },
-  {
-    id: 'fabio',
-    name: 'Fabio',
-    initials: 'FB',
-    role: "Perri's Agent",
-    status: 'online',
-    model: 'claude-sonnet-4',
-    modelDisplay: 'Claude 4 Sonnet',
-    lastActive: new Date(Date.now() - 8 * 60 * 1000), // 8 min ago
-    recentActions: [
-      { icon: '📧', text: 'Replied to coaching inquiry', time: '8m ago' },
-      { icon: '📝', text: 'Drafted newsletter copy', time: '22m ago' },
-      { icon: '🎥', text: 'Reviewed video transcript', time: '1h ago' },
-    ],
-    stats: {
-      totalActions: 892,
-      uptime: '2d 8h',
-      tokensUsed: '1.1M',
-    },
-    activity: [20, 35, 50, 40, 30, 25, 45, 60, 55, 40, 30, 50, 60, 45, 35, 40, 55, 70, 45, 30, 50, 40, 35, 45],
-  },
-  {
-    id: 'hermes',
-    name: 'Hermes',
-    initials: 'HM',
-    role: 'Messenger / Notifications',
-    status: 'busy',
-    model: 'gpt-4o-mini',
-    modelDisplay: 'GPT-4o Mini',
-    lastActive: new Date(Date.now() - 45 * 60 * 1000), // 45 min ago
-    recentActions: [
-      { icon: '📨', text: 'Sent GSM call reminder', time: '45m ago' },
-      { icon: '🔔', text: 'Delivered morning briefing', time: '3h ago' },
-      { icon: '📱', text: 'Pushed Telegram alert', time: '5h ago' },
-    ],
-    stats: {
-      totalActions: 356,
-      uptime: '1d 4h',
-      tokensUsed: '420K',
-    },
-    activity: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35],
-  },
+import { makeWindowDraggable } from './windowDrag.js';
+
+const API_BASE = window.location.origin;
+let _open = false;
+let _agents = [];
+let _agentsFetched = false;
+let _pollInterval = null;
+
+// Phase 1: mock data — replace with real API in Phase 2
+const _mockAgents = [
+  { id:'chiron', name:'Chiron', role:'Orchestrator', status:'online', model:'kimi-k2.6:cloud', host:'Watchtower', uptime:'3d 7h', tasksToday:12, tasksDone:8, lastAction:'Linear API integration', lastActionTime:'2 min ago', color:'#A8E10C' },
+  { id:'fabio',  name:'Fabio',  role:'Perri\'s Agent', status:'online', model:'glm-5.1:cloud', host:'fabio-test-gateway', uptime:'1d 14h', tasksToday:5, tasksDone:3, lastAction:'Email responder v3 test', lastActionTime:'15 min ago', color:'#FAAFCC' },
+  { id:'hermes', name:'Hermes', role:'Knowledge Worker', status:'idle', model:'llama3.3:70b', host:'Hermes container', uptime:'0d 4h', tasksToday:0, tasksDone:0, lastAction:'Waiting for tasks', lastActionTime:'—', color:'#B2EAEA' }
 ];
 
-// ── Utilities ─────────────────────────────────────────────────────────
-function formatRelativeTime(date) {
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString();
+async function _fetchAgents() {
+  _agents = [..._mockAgents];
+  _agentsFetched = true;
 }
 
-function statusLabel(status) {
-  const map = { online: 'Online', offline: 'Offline', busy: 'Busy' };
-  return map[status] || status;
+function _esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function _render() {
+  const body = document.getElementById('agent-dashboard-body');
+  if (!body) return;
+  if (!_agentsFetched) { body.innerHTML='<div style="opacity:0.4;font-size:12px;text-align:center;padding:40px 0;">Loading agents...</div>'; return; }
+  if (!_agents.length) { body.innerHTML='<div style="opacity:0.4;font-size:12px;text-align:center;padding:40px 0;">No agents configured.</div>'; return; }
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:8px;';
+
+  for (const a of _agents) {
+    const dot = a.status==='online' ? '🟢' : a.status==='idle' ? '⚪' : '🔴';
+    const card = document.createElement('div');
+    card.style.cssText = `background:var(--panel-bg,#1A1A1A);border:1px solid ${a.color}44;border-radius:8px;padding:14px;`;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid ${a.color}44;">${a.name[0]}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;">${_esc(a.name)}</div>
+          <div style="font-size:11px;opacity:0.6;">${_esc(a.role)}</div>
+        </div>
+        <div style="font-size:11px;opacity:0.7;">${dot} ${a.status}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;margin-bottom:10px;">
+        <div style="background:var(--bg);padding:6px 8px;border-radius:4px;"><div style="opacity:0.5;margin-bottom:2px;">Model</div><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(a.model)}</div></div>
+        <div style="background:var(--bg);padding:6px 8px;border-radius:4px;"><div style="opacity:0.5;margin-bottom:2px;">Host</div><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(a.host)}</div></div>
+        <div style="background:var(--bg);padding:6px 8px;border-radius:4px;"><div style="opacity:0.5;margin-bottom:2px;">Uptime</div><div style="font-weight:500;">${a.uptime}</div></div>
+        <div style="background:var(--bg);padding:6px 8px;border-radius:4px;"><div style="opacity:0.5;margin-bottom:2px;">Tasks Today</div><div style="font-weight:500;">${a.tasksDone}/${a.tasksToday}</div></div>
+      </div>
+      <div style="font-size:11px;opacity:0.7;padding-top:6px;border-top:1px solid var(--border);"><span style="opacity:0.5;">Last:</span> ${_esc(a.lastAction)} · ${a.lastActionTime}</div>
+    `;
+    grid.appendChild(card);
+  }
+  body.innerHTML = '';
+  body.appendChild(grid);
 }
 
-// ── Render ──────────────────────────────────────────────────────────────
-function renderAgentCard(agent) {
-  const recentActionsHtml = agent.recentActions
-    .map(
-      (a) => `
-      <div class="agent-action-item">
-        <span class="agent-action-icon">${a.icon}</span>
-        <span>${a.text}</span>
-        <span class="agent-action-time">${a.time}</span>
-      </div>
-    `
-    )
-    .join('');
+export function openAgentDashboard() {
+  if (_open) return;
+  _open = true;
 
-  const activityBars = agent.activity
-    .map((h) => `<div class="activity-bar" style="height:${h}%"></div>`)
-    .join('');
-
-  return `
-    <article class="agent-card" data-agent-id="${agent.id}">
-      <div class="agent-card-header">
-        <div class="agent-avatar-wrap">
-          <div class="agent-avatar --${agent.id}">${agent.initials}</div>
-          <div class="agent-name-block">
-            <h3 class="agent-name">${agent.name}</h3>
-            <span class="agent-role">${agent.role}</span>
-          </div>
-        </div>
-        <div class="agent-status-pill">
-          <span class="status-dot ${agent.status}"></span>
-          <span>${statusLabel(agent.status)}</span>
-        </div>
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'agent-dashboard-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="width:700px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;">
+      <div class="modal-header">
+        <h4 style="position:relative;top:-2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><circle cx="12" cy="7" r="5"/><path d="M17 22H7"/><path d="M12 17v5"/></svg>Agents</h4>
+        <span style="flex:1"></span>
+        <span id="agent-count" style="font-size:12px;opacity:0.6;margin-right:12px;">0 agents</span>
+        <button class="close-btn" id="agent-dashboard-close">✖</button>
       </div>
-
-      <div class="agent-stats">
-        <div class="agent-stat">
-          <span class="agent-stat-label">Model</span>
-          <span class="agent-stat-value accent">${agent.modelDisplay}</span>
-        </div>
-        <div class="agent-stat">
-          <span class="agent-stat-label">Last Active</span>
-          <span class="agent-stat-value">${formatRelativeTime(agent.lastActive)}</span>
-        </div>
-        <div class="agent-stat">
-          <span class="agent-stat-label">Actions (24h)</span>
-          <span class="agent-stat-value">${agent.stats.totalActions.toLocaleString()}</span>
-        </div>
-        <div class="agent-stat">
-          <span class="agent-stat-label">Uptime</span>
-          <span class="agent-stat-value">${agent.stats.uptime}</span>
-        </div>
-      </div>
-
-      <div class="agent-activity-mini" title="Activity over last 24 hours (hourly)">
-        ${activityBars}
-      </div>
-
-      <div class="agent-recent-actions">
-        <div class="agent-recent-actions-label">Recent Actions</div>
-        ${recentActionsHtml}
-      </div>
-    </article>
+      <div class="modal-body" id="agent-dashboard-body" style="flex:1;overflow:auto;"></div>
+    </div>
   `;
-}
+  document.body.appendChild(modal);
 
-function renderAddAgentCard() {
-  return `
-    <button class="add-agent-card" id="btn-add-agent" type="button">
-      <div class="add-agent-icon">+</div>
-      <span class="add-agent-label">Add Agent</span>
-      <span class="add-agent-hint">Deploy a new AI assistant</span>
-    </button>
-  `;
-}
+  { const c=modal.querySelector('.modal-content'), h=modal.querySelector('.modal-header'); if(c&&h) makeWindowDraggable(modal,{content:c,header:h}); }
 
-function renderDashboard() {
-  const grid = document.getElementById('agent-grid');
-  if (!grid) return;
+  document.getElementById('agent-dashboard-close').addEventListener('click', closeAgentDashboard);
+  modal.addEventListener('click', (e) => { if(e.target===modal) closeAgentDashboard(); });
 
-  const cardsHtml = MOCK_AGENTS.map(renderAgentCard).join('');
-  grid.innerHTML = cardsHtml + renderAddAgentCard();
-
-  // Update count badge
-  const badge = document.getElementById('agent-count');
-  if (badge) badge.textContent = `${MOCK_AGENTS.length} agent${MOCK_AGENTS.length !== 1 ? 's' : ''}`;
-
-  // Wire click on agent cards (placeholder navigation)
-  grid.querySelectorAll('.agent-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      const id = card.dataset.agentId;
-      console.log(`[AgentDashboard] Open agent detail: ${id}`);
-      // Future: router.push(`/agents/${id}`)
-    });
+  _fetchAgents().then(() => {
+    _render();
+    const el = document.getElementById('agent-count');
+    if (el) el.textContent = `${_agents.length} agent${_agents.length!==1?'s':''}`;
   });
 
-  // Wire add-agent button
-  const addBtn = document.getElementById('btn-add-agent');
-  if (addBtn) addBtn.addEventListener('click', openModal);
+  _pollInterval = setInterval(async () => { await _fetchAgents(); _render(); }, 30000);
 }
 
-// ── Modal ───────────────────────────────────────────────────────────────
-const modal = document.getElementById('add-agent-modal');
-const form = document.getElementById('add-agent-form');
-
-function openModal() {
-  if (!modal) return;
-  modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  // Focus first input
-  setTimeout(() => document.getElementById('agent-name')?.focus(), 50);
+export function closeAgentDashboard() {
+  if (!_open) return;
+  _open = false;
+  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval=null; }
+  const modal = document.getElementById('agent-dashboard-modal');
+  if (modal) {
+    const c = modal.querySelector('.modal-content');
+    if (c) { c.classList.add('modal-closing'); c.addEventListener('animationend',()=>modal.remove(),{once:true}); setTimeout(()=>{if(modal.parentElement)modal.remove();},250); }
+    else modal.remove();
+  }
 }
 
-function closeModal() {
-  if (!modal) return;
-  modal.classList.remove('open');
-  document.body.style.overflow = '';
-  form?.reset();
-}
-
-function handleSubmit(e) {
-  e.preventDefault();
-
-  const name = document.getElementById('agent-name')?.value.trim();
-  const model = document.getElementById('agent-model')?.value;
-  const role = document.getElementById('agent-role')?.value;
-  const systemPrompt = document.getElementById('agent-system-prompt')?.value.trim();
-
-  if (!name || !model || !role) return;
-
-  // Create new agent object
-  const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  const initials = name.slice(0, 2).toUpperCase();
-
-  const newAgent = {
-    id,
-    name,
-    initials,
-    role: role.charAt(0).toUpperCase() + role.slice(1),
-    status: 'online',
-    model,
-    modelDisplay: model,
-    lastActive: new Date(),
-    recentActions: [{ icon: '✨', text: 'Agent created', time: 'Just now' }],
-    stats: { totalActions: 0, uptime: '0m', tokensUsed: '0' },
-    activity: Array(24).fill(0),
-  };
-
-  MOCK_AGENTS.push(newAgent);
-  renderDashboard();
-  closeModal();
-
-  console.log('[AgentDashboard] Created agent:', newAgent);
-}
-
-// ── Real-time Simulation ────────────────────────────────────────────────
-function simulateLiveUpdates() {
-  // Randomly update "last active" times so the dashboard feels alive
-  setInterval(() => {
-    const randomAgent = MOCK_AGENTS[Math.floor(Math.random() * MOCK_AGENTS.length)];
-    if (Math.random() > 0.7) {
-      randomAgent.lastActive = new Date();
-      // Occasionally add a new action
-      if (Math.random() > 0.5) {
-        const actions = [
-          { icon: '💬', text: 'Processed chat message' },
-          { icon: '📅', text: 'Checked calendar' },
-          { icon: '📧', text: 'Scanned inbox' },
-          { icon: '🔧', text: 'Ran shell command' },
-          { icon: '📝', text: 'Drafted response' },
-          { icon: '🔍', text: 'Web search query' },
-        ];
-        const action = actions[Math.floor(Math.random() * actions.length)];
-        randomAgent.recentActions.unshift({ ...action, time: 'Just now' });
-        if (randomAgent.recentActions.length > 4) randomAgent.recentActions.pop();
-        randomAgent.stats.totalActions++;
-      }
-      // Update one random activity bar
-      const idx = Math.floor(Math.random() * 24);
-      randomAgent.activity[idx] = Math.min(100, randomAgent.activity[idx] + Math.floor(Math.random() * 15));
-
-      renderDashboard();
-    }
-  }, 8000);
-}
-
-// ── Initialization ──────────────────────────────────────────────────────
-function init() {
-  renderDashboard();
-
-  // Modal events
-  document.getElementById('modal-close')?.addEventListener('click', closeModal);
-  document.getElementById('modal-cancel')?.addEventListener('click', closeModal);
-  modal?.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
-  form?.addEventListener('submit', handleSubmit);
-
-  // ESC to close modal
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal?.classList.contains('open')) {
-      closeModal();
-    }
-  });
-
-  // Live updates
-  simulateLiveUpdates();
-
-  console.log('[AgentDashboard] Initialized with', MOCK_AGENTS.length, 'agents');
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+export function isAgentDashboardOpen() { return _open; }
