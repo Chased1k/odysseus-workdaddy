@@ -1,521 +1,327 @@
 /**
- * chat-telegram.js — Telegram chat interface for Odysseus (Work Daddy)
+ * Telegram Chat Widget — floating modal with Telegram-style chat interface.
+ * Follows Odysseus modal pattern (see tasks.js, agent-dashboard.js, task-board.js)
  *
- * Uses mock data for now. Replace MockAPI calls with real Telegram Bot API
- * (fetch to your backend or direct to api.telegram.org/bot<TOKEN>/...).
- *
- * Structure:
- *   - MockAPI:    mock data store + async methods matching TG Bot API shape
- *   - UI:         render thread list, message history, composer
- *   - State:      activeThreadId, drafts, search filter
+ * Mock data ready for future Telegram Bot API integration.
  */
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Mock API (replace with real fetch calls later)
-// ═════════════════════════════════════════════════════════════════════════════
+import { makeWindowDraggable } from './windowDrag.js';
 
-const MOCK_USERS = {
-  u1: { id: 'u1', first_name: 'Kellen', last_name: '', username: 'kellenpc', avatar: null },
-  u2: { id: 'u2', first_name: 'Perri', last_name: 'Chase', username: 'perrichase', avatar: null },
-  u3: { id: 'u3', first_name: 'Scarlet', last_name: '', username: null, avatar: null },
-  u4: { id: 'u4', first_name: 'Team Chase', last_name: '', username: null, avatar: null },
-  u5: { id: 'u5', first_name: 'Chiron', last_name: '', username: 'chiron_bot', avatar: null },
-  u6: { id: 'u6', first_name: 'Joyce', last_name: 'Coulthard', username: null, avatar: null },
-};
+const API_BASE = window.location.origin;
+let _open = false;
+let _escHandler = null;
+let _activeThreadId = null;
 
-const MOCK_THREADS = [
+// ---- Mock data (ready for real API integration) ----
+
+const _mockThreads = [
   {
-    id: 't1',
-    type: 'private',
-    title: 'Perri Chase',
-    user_id: 'u2',
+    id: 'perri',
+    name: 'Perri Chase',
+    handle: '@perri',
+    avatar: 'P',
+    avatarColor: '#FAAFCC',
+    lastMessage: 'Can you check the SamCart stats before our call?',
+    lastTime: '10:32 AM',
     unread: 2,
-    last_message: { text: 'Can you check the SamCart numbers?', date: Date.now() / 1000 - 300 },
+    messages: [
+      { id: 1, sender: 'Perri Chase', self: false, text: 'Hey! Did you see the new Mighty Networks update?', time: '10:15 AM' },
+      { id: 2, sender: 'You', self: true, text: 'Not yet — what changed?', time: '10:16 AM' },
+      { id: 3, sender: 'Perri Chase', self: false, text: 'They added bulk member exports. Huge for our HubSpot sync.', time: '10:18 AM' },
+      { id: 4, sender: 'You', self: true, text: 'That saves us a ton of Zapier calls. Nice.', time: '10:20 AM' },
+      { id: 5, sender: 'Perri Chase', self: false, text: 'Can you check the SamCart stats before our call?', time: '10:32 AM' },
+    ]
   },
   {
-    id: 't2',
-    type: 'group',
-    title: 'Team Chase Ops',
-    user_id: null,
-    unread: 5,
-    last_message: { text: 'Kellen: Perfect Cut deploy is live 🚀', date: Date.now() / 1000 - 1200 },
-  },
-  {
-    id: 't3',
-    type: 'private',
-    title: 'Scarlet',
-    user_id: 'u3',
+    id: 'kellen',
+    name: 'Kellen',
+    handle: '@kellen',
+    avatar: 'K',
+    avatarColor: '#A8E10C',
+    lastMessage: 'The Perfect Cut deploy went through. Vercel green.',
+    lastTime: '9:47 AM',
     unread: 0,
-    last_message: { text: 'Dad, can we work on Warrior Dog tonight?', date: Date.now() / 1000 - 7200 },
+    messages: [
+      { id: 1, sender: 'Kellen', self: false, text: 'Morning — pushed the Vercel config fix.', time: '9:30 AM' },
+      { id: 2, sender: 'You', self: true, text: 'Saw the PR. LGTM.', time: '9:35 AM' },
+      { id: 3, sender: 'Kellen', self: false, text: 'The Perfect Cut deploy went through. Vercel green.', time: '9:47 AM' },
+    ]
   },
   {
-    id: 't4',
-    type: 'private',
-    title: 'Joyce',
-    user_id: 'u6',
+    id: 'support',
+    name: 'Support',
+    handle: '@support_bot',
+    avatar: 'S',
+    avatarColor: '#B2EAEA',
+    lastMessage: 'Unhandled exception in payments webhook. Stripe 402.',
+    lastTime: 'Yesterday',
     unread: 1,
-    last_message: { text: 'Flight confirmed PZQ11V for May 8', date: Date.now() / 1000 - 18000 },
+    messages: [
+      { id: 1, sender: 'Support Bot', self: false, text: 'Unhandled exception in payments webhook. Stripe 402.', time: 'Yesterday' },
+      { id: 2, sender: 'You', self: true, text: 'Looking into it now.', time: 'Yesterday' },
+    ]
   },
   {
-    id: 't5',
-    type: 'private',
-    title: 'Chiron (bot)',
-    user_id: 'u5',
+    id: 'teamchase',
+    name: 'Team Chase',
+    handle: 'Team Chase LLC',
+    avatar: 'T',
+    avatarColor: '#F9EBDC',
+    lastMessage: 'Perri: Let’s move the Monday call to Tuesday.',
+    lastTime: 'Tue',
     unread: 0,
-    last_message: { text: 'Morning briefing ready.', date: Date.now() / 1000 - 86400 },
+    messages: [
+      { id: 1, sender: 'Perri Chase', self: false, text: 'Let’s move the Monday call to Tuesday.', time: 'Tue' },
+      { id: 2, sender: 'Kellen', self: false, text: 'Works for me.', time: 'Tue' },
+    ]
   },
+  {
+    id: 'dev',
+    name: 'Dev Channel',
+    handle: '@dev_channel',
+    avatar: 'D',
+    avatarColor: '#A8E10C',
+    lastMessage: 'CI passing on main again. Docker build fixed.',
+    lastTime: 'Mon',
+    unread: 0,
+    messages: [
+      { id: 1, sender: 'Dev Bot', self: false, text: 'CI passing on main again. Docker build fixed.', time: 'Mon' },
+    ]
+  }
 ];
 
-const MOCK_MESSAGES = {
-  t1: [
-    { id: 101, from: 'u2', text: 'Hey — did the SamCart payouts hit yet?', date: Date.now() / 1000 - 3600, out: false },
-    { id: 102, from: 'u1', text: 'Checking now. One sec.', date: Date.now() / 1000 - 3500, out: true },
-    { id: 103, from: 'u2', text: 'Also need the Mighty Networks member count for the email.', date: Date.now() / 1000 - 3400, out: false },
-    { id: 104, from: 'u1', text: 'Got it. 847 active as of this morning.', date: Date.now() / 1000 - 3300, out: true },
-    { id: 105, from: 'u2', text: 'Can you check the SamCart numbers?', date: Date.now() / 1000 - 300, out: false },
-  ],
-  t2: [
-    { id: 201, from: 'u1', text: 'New SamCart upsell is configured.', date: Date.now() / 1000 - 5000, out: true },
-    { id: 202, from: 'u2', text: 'Great. What’s the take rate so far?', date: Date.now() / 1000 - 4800, out: false },
-    { id: 203, from: 'u1', text: '12% on the first 200 checkouts.', date: Date.now() / 1000 - 4600, out: true },
-    { id: 204, from: 'u4', text: 'Nice. Let’s keep it.', date: Date.now() / 1000 - 4500, out: false },
-    { id: 205, from: 'u1', text: 'Perfect Cut deploy is live 🚀', date: Date.now() / 1000 - 1200, out: true },
-  ],
-  t3: [
-    { id: 301, from: 'u3', text: 'I added the zombie sprite to the assets folder!', date: Date.now() / 1000 - 10000, out: false },
-    { id: 302, from: 'u1', text: 'Saw it — looks sick. We’ll wire it up in level 2.', date: Date.now() / 1000 - 9900, out: true },
-    { id: 303, from: 'u3', text: 'Dad, can we work on Warrior Dog tonight?', date: Date.now() / 1000 - 7200, out: false },
-  ],
-  t4: [
-    { id: 401, from: 'u6', text: 'Geoffrey booked the flights.', date: Date.now() / 1000 - 20000, out: false },
-    { id: 402, from: 'u1', text: 'Awesome. Forward me the confirmation?', date: Date.now() / 1000 - 19500, out: true },
-    { id: 403, from: 'u6', text: 'Flight confirmed PZQ11V for May 8', date: Date.now() / 1000 - 18000, out: false },
-  ],
-  t5: [
-    { id: 501, from: 'u5', text: 'Morning briefing ready.', date: Date.now() / 1000 - 86400, out: false },
-    { id: 502, from: 'u1', text: 'Send it.', date: Date.now() / 1000 - 86000, out: true },
-    { id: 503, from: 'u5', text: 'Briefing delivered to your Telegram.', date: Date.now() / 1000 - 85900, out: false },
-  ],
-};
+// ---- Helpers ----
 
-const MockAPI = {
-  async getUpdates() {
-    // In real implementation: fetch('/api/telegram/updates') or polling to Bot API
-    return { ok: true, result: [] };
-  },
-  async getThreads() {
-    // In real implementation: fetch('/api/telegram/chats') or getUpdates-derived chat list
-    return { ok: true, result: MOCK_THREADS };
-  },
-  async getMessages(chatId) {
-    // In real implementation: fetch(`/api/telegram/messages?chat_id=${chatId}`)
-    return { ok: true, result: MOCK_MESSAGES[chatId] || [] };
-  },
-  async sendMessage(chatId, text) {
-    // In real implementation: POST /api/telegram/send or api.telegram.org/bot.../sendMessage
-    const msg = {
-      id: Date.now(),
-      from: 'u1',
-      text,
-      date: Date.now() / 1000,
-      out: true,
-    };
-    if (!MOCK_MESSAGES[chatId]) MOCK_MESSAGES[chatId] = [];
-    MOCK_MESSAGES[chatId].push(msg);
-    // Update last_message on thread
-    const t = MOCK_THREADS.find((x) => x.id === chatId);
-    if (t) t.last_message = { text, date: msg.date };
-    return { ok: true, result: msg };
-  },
-};
+function _esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Utilities
-// ═════════════════════════════════════════════════════════════════════════════
-
-function fmtTime(unix) {
-  const d = new Date(unix * 1000);
+function _formatTime() {
   const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  if (isToday) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
+// ---- Render ----
 
-function getInitials(name) {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
+function _renderThreadList() {
+  const list = document.getElementById('chat-telegram-thread-list');
+  if (!list) return;
+  list.innerHTML = '';
 
-function el(tag, attrs = {}, children = []) {
-  const e = document.createElement(tag);
-  Object.entries(attrs).forEach(([k, v]) => {
-    if (k === 'className') e.className = v;
-    else if (k === 'text') e.textContent = v;
-    else if (k === 'html') e.innerHTML = v;
-    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
-    else e.setAttribute(k, v);
-  });
-  children.forEach((c) => e.appendChild(c));
-  return e;
-}
+  _mockThreads.forEach(thread => {
+    const isActive = thread.id === _activeThreadId;
+    const unreadDot = thread.unread > 0
+      ? `<span class="chat-telegram-unread">${thread.unread}</span>`
+      : '';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// State
-// ═════════════════════════════════════════════════════════════════════════════
-
-const state = {
-  threads: [],
-  activeThreadId: null,
-  messages: {},
-  drafts: {},
-  filter: '',
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Render: Thread List
-// ═════════════════════════════════════════════════════════════════════════════
-
-function renderThreadList() {
-  const container = document.getElementById('tg-thread-list');
-  container.innerHTML = '';
-
-  const term = state.filter.toLowerCase();
-  const filtered = state.threads.filter((t) => t.title.toLowerCase().includes(term));
-
-  if (filtered.length === 0) {
-    container.appendChild(
-      el('div', { className: 'tg-chat-empty', style: 'padding:24px 0;' }, [
-        el('span', { text: 'No chats found.' }),
-      ])
-    );
-    return;
-  }
-
-  filtered.forEach((t) => {
-    const lastText = t.last_message?.text || '';
-    const time = t.last_message?.date ? fmtTime(t.last_message.date) : '';
-    const active = state.activeThreadId === t.id;
-
-    const row = el('div', {
-      className: `tg-thread${active ? ' active' : ''}`,
-      role: 'listitem',
-      onclick: () => selectThread(t.id),
-    }, [
-      el('div', { className: 'tg-thread-avatar' }, [
-        el('span', { text: getInitials(t.title) }),
-      ]),
-      el('div', { className: 'tg-thread-body' }, [
-        el('div', { className: 'tg-thread-top' }, [
-          el('span', { className: 'tg-thread-name', text: t.title }),
-          el('span', { className: 'tg-thread-time', text: time }),
-        ]),
-        el('div', { className: 'tg-thread-bottom' }, [
-          el('span', { className: 'tg-thread-preview', text: lastText }),
-          t.unread > 0 ? el('span', { className: 'tg-thread-badge', text: String(t.unread) }) : null,
-          el('span', { className: 'tg-thread-type', text: t.type === 'group' ? 'group' : 'DM' }),
-        ].filter(Boolean)),
-      ]),
-    ]);
-
-    container.appendChild(row);
+    const item = document.createElement('div');
+    item.className = 'chat-telegram-thread' + (isActive ? ' active' : '');
+    item.dataset.threadId = thread.id;
+    item.innerHTML = `
+      <div class="chat-telegram-thread-avatar" style="background:${thread.avatarColor}22;color:${thread.avatarColor};border-color:${thread.avatarColor}44;">
+        ${_esc(thread.avatar)}
+      </div>
+      <div class="chat-telegram-thread-info">
+        <div class="chat-telegram-thread-top">
+          <span class="chat-telegram-thread-name">${_esc(thread.name)}</span>
+          <span class="chat-telegram-thread-time">${_esc(thread.lastTime)}</span>
+        </div>
+        <div class="chat-telegram-thread-bottom">
+          <span class="chat-telegram-thread-preview">${_esc(thread.lastMessage)}</span>
+          ${unreadDot}
+        </div>
+      </div>
+    `;
+    item.addEventListener('click', () => _switchThread(thread.id));
+    list.appendChild(item);
   });
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Render: Messages
-// ═════════════════════════════════════════════════════════════════════════════
+function _renderMessages() {
+  const body = document.getElementById('chat-telegram-message-area');
+  const headerName = document.getElementById('chat-telegram-header-name');
+  const headerStatus = document.getElementById('chat-telegram-header-status');
+  if (!body) return;
 
-function renderMessages(threadId) {
-  const history = document.getElementById('tg-chat-history');
-  const empty = document.getElementById('tg-chat-empty');
-  const header = document.getElementById('tg-chat-header');
-  const composer = document.getElementById('tg-composer');
-  const headerName = document.getElementById('tg-header-name');
-  const headerSub = document.getElementById('tg-header-sub');
-  const headerAvatar = document.getElementById('tg-header-avatar');
-
-  if (!threadId) {
-    history.style.display = 'none';
-    empty.style.display = 'flex';
-    header.style.display = 'none';
-    composer.style.display = 'none';
+  const thread = _mockThreads.find(t => t.id === _activeThreadId);
+  if (!thread) {
+    body.innerHTML = `
+      <div class="chat-telegram-empty">
+        <div style="font-size:40px;opacity:0.3;margin-bottom:12px;">💬</div>
+        <div style="opacity:0.5;font-size:13px;">Select a conversation</div>
+      </div>
+    `;
+    if (headerName) headerName.textContent = 'Telegram';
+    if (headerStatus) headerStatus.textContent = '';
     return;
   }
 
-  const thread = state.threads.find((t) => t.id === threadId);
-  if (!thread) return;
+  if (headerName) headerName.textContent = thread.name;
+  if (headerStatus) headerStatus.textContent = thread.handle;
 
-  empty.style.display = 'none';
-  header.style.display = 'flex';
-  composer.style.display = 'block';
-  history.style.display = 'flex';
+  body.innerHTML = '';
+  let lastSender = null;
 
-  headerName.textContent = thread.title;
-  headerSub.textContent = thread.type === 'group' ? `${(state.messages[threadId] || []).length} messages` : 'Telegram';
-  headerAvatar.innerHTML = `<span>${getInitials(thread.title)}</span>`;
-
-  history.innerHTML = '';
-  const msgs = state.messages[threadId] || [];
-  if (msgs.length === 0) {
-    history.appendChild(
-      el('div', { className: 'tg-chat-empty' }, [
-        el('span', { text: 'No messages yet.' }),
-      ])
-    );
-    return;
-  }
-
-  let lastDate = null;
-  msgs.forEach((m) => {
-    const date = new Date(m.date * 1000).toDateString();
-    if (date !== lastDate) {
-      lastDate = date;
-      history.appendChild(
-        el('div', {
-          className: 'tg-msg-date',
-          style: 'align-self:center; font-size:11px; color:color-mix(in srgb, var(--fg) 45%, transparent); margin:6px 0; padding:2px 8px; border-radius:999px; background:color-mix(in srgb, var(--fg) 6%, transparent);',
-          text: new Date(m.date * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
-        })
-      );
-    }
-
-    const user = MOCK_USERS[m.from] || { first_name: 'Unknown' };
-    const isOut = !!m.out;
-    const cls = isOut ? 'tg-msg-out' : 'tg-msg-in';
-
-    const meta = el('div', { className: 'tg-msg-meta' }, [
-      el('span', { text: fmtTime(m.date) }),
-    ]);
-
-    if (isOut) {
-      meta.appendChild(
-        el('span', { className: 'tg-msg-status', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' })
-      );
-    }
-
-    const bubble = el('div', { className: `tg-msg ${cls}` }, [
-      thread.type === 'group' && !isOut
-        ? el('div', { className: 'tg-msg-sender', text: user.first_name })
-        : null,
-      el('div', { className: 'tg-msg-text', html: escapeHtml(m.text).replace(/\n/g, '<br>') }),
-      meta,
-    ].filter(Boolean));
-
-    history.appendChild(bubble);
+  thread.messages.forEach((msg, idx) => {
+    const showName = !msg.self && msg.sender !== lastSender;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-telegram-bubble-row' + (msg.self ? ' self' : '');
+    bubble.innerHTML = `
+      <div class="chat-telegram-bubble">
+        ${showName ? `<div class="chat-telegram-bubble-name">${_esc(msg.sender)}</div>` : ''}
+        <div class="chat-telegram-bubble-text">${_esc(msg.text)}</div>
+        <div class="chat-telegram-bubble-time">${msg.time}</div>
+      </div>
+    `;
+    body.appendChild(bubble);
+    lastSender = msg.sender;
   });
 
   // Scroll to bottom
-  requestAnimationFrame(() => {
-    history.scrollTop = history.scrollHeight;
-  });
+  body.scrollTop = body.scrollHeight;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Actions
-// ═════════════════════════════════════════════════════════════════════════════
-
-async function selectThread(id) {
-  if (state.activeThreadId === id) return;
-  state.activeThreadId = id;
-
-  // Load messages if not cached
-  if (!state.messages[id]) {
-    const res = await MockAPI.getMessages(id);
-    if (res.ok) state.messages[id] = res.result;
-  }
-
-  renderThreadList();
-  renderMessages(id);
-
-  // Restore draft
-  const input = document.getElementById('tg-message-input');
-  input.value = state.drafts[id] || '';
-  autoResize(input);
-
-  // On mobile, close sidebar
-  if (window.innerWidth <= 768) {
-    document.getElementById('tg-sidebar').classList.remove('open');
-    document.getElementById('tg-sidebar-backdrop').classList.remove('show');
-  }
+function _switchThread(threadId) {
+  _activeThreadId = threadId;
+  // Clear unread
+  const thread = _mockThreads.find(t => t.id === threadId);
+  if (thread) thread.unread = 0;
+  _renderThreadList();
+  _renderMessages();
 }
 
-async function sendMessage() {
-  const input = document.getElementById('tg-message-input');
+function _sendMessage() {
+  const input = document.getElementById('chat-telegram-input');
+  if (!input) return;
   const text = input.value.trim();
-  if (!text || !state.activeThreadId) return;
+  if (!text || !_activeThreadId) return;
 
-  const btn = document.getElementById('tg-send-btn');
-  btn.disabled = true;
+  const thread = _mockThreads.find(t => t.id === _activeThreadId);
+  if (!thread) return;
 
-  // Optimistic insert
-  const optimistic = {
-    id: 'local-' + Date.now(),
-    from: 'u1',
+  const msg = {
+    id: Date.now(),
+    sender: 'You',
+    self: true,
     text,
-    date: Date.now() / 1000,
-    out: true,
-    pending: true,
+    time: _formatTime()
   };
-  if (!state.messages[state.activeThreadId]) state.messages[state.activeThreadId] = [];
-  state.messages[state.activeThreadId].push(optimistic);
-  renderMessages(state.activeThreadId);
-
-  // Call API
-  const res = await MockAPI.sendMessage(state.activeThreadId, text);
-
-  // Replace optimistic with confirmed (or mark failed)
-  const idx = state.messages[state.activeThreadId].findIndex((m) => m.id === optimistic.id);
-  if (idx !== -1) {
-    if (res.ok) {
-      state.messages[state.activeThreadId][idx] = res.result;
-    } else {
-      state.messages[state.activeThreadId][idx].failed = true;
-      state.messages[state.activeThreadId][idx].pending = false;
-    }
-  }
-
-  // Clear draft + input
-  state.drafts[state.activeThreadId] = '';
+  thread.messages.push(msg);
+  thread.lastMessage = text;
+  thread.lastTime = 'now';
   input.value = '';
-  autoResize(input);
+  _renderThreadList();
+  _renderMessages();
 
-  // Refresh thread list so last_message updates
-  renderThreadList();
-  renderMessages(state.activeThreadId);
-
-  btn.disabled = false;
+  // TODO: wire to Telegram Bot API here
+  // fetch(`${API_BASE}/api/telegram/send`, { ... })
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Composer
-// ═════════════════════════════════════════════════════════════════════════════
+// ---- Modal ----
 
-function autoResize(textarea) {
-  textarea.style.height = 'auto';
-  textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px';
+export function openChatTelegram() {
+  if (_open) return;
+  _open = true;
+  if (!_activeThreadId && _mockThreads.length) {
+    _activeThreadId = _mockThreads[0].id;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'chat-telegram-modal';
+  modal.innerHTML = `
+    <div class="modal-content chat-telegram-modal-content">
+      <div class="modal-header">
+        <h4 style="position:relative;top:-2px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span id="chat-telegram-header-name">Telegram</span>
+        </h4>
+        <span id="chat-telegram-header-status" style="font-size:11px;opacity:0.5;margin-left:8px;flex:1;"></span>
+        <button class="close-btn" id="chat-telegram-close">✖</button>
+      </div>
+      <div class="chat-telegram-body">
+        <div class="chat-telegram-sidebar" id="chat-telegram-thread-list"></div>
+        <div class="chat-telegram-main">
+          <div class="chat-telegram-message-area" id="chat-telegram-message-area">
+            <div class="chat-telegram-empty">
+              <div style="font-size:40px;opacity:0.3;margin-bottom:12px;">💬</div>
+              <div style="opacity:0.5;font-size:13px;">Select a conversation</div>
+            </div>
+          </div>
+          <div class="chat-telegram-composer">
+            <input type="text" id="chat-telegram-input" class="chat-telegram-input" placeholder="Message..." autocomplete="off" />
+            <button class="chat-telegram-send" id="chat-telegram-send" title="Send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Draggable
+  {
+    const c = modal.querySelector('.modal-content');
+    const h = modal.querySelector('.modal-header');
+    if (c && h) makeWindowDraggable(modal, { content: c, header: h });
+  }
+
+  // Events
+  document.getElementById('chat-telegram-close').addEventListener('click', closeChatTelegram);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeChatTelegram(); });
+
+  _escHandler = (e) => { if (e.key === 'Escape') closeChatTelegram(); };
+  document.addEventListener('keydown', _escHandler);
+
+  // Send
+  const sendBtn = document.getElementById('chat-telegram-send');
+  const input = document.getElementById('chat-telegram-input');
+  if (sendBtn) sendBtn.addEventListener('click', _sendMessage);
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        _sendMessage();
+      }
+    });
+  }
+
+  _renderThreadList();
+  _renderMessages();
 }
 
-function initComposer() {
-  const input = document.getElementById('tg-message-input');
-  const btn = document.getElementById('tg-send-btn');
-
-  input.addEventListener('input', () => {
-    autoResize(input);
-    if (state.activeThreadId) {
-      state.drafts[state.activeThreadId] = input.value;
+export function closeChatTelegram() {
+  if (!_open) return;
+  _open = false;
+  if (_escHandler) {
+    document.removeEventListener('keydown', _escHandler);
+    _escHandler = null;
+  }
+  const modal = document.getElementById('chat-telegram-modal');
+  if (modal) {
+    const c = modal.querySelector('.modal-content');
+    if (c) {
+      c.classList.add('modal-closing');
+      c.addEventListener('animationend', () => modal.remove(), { once: true });
+      setTimeout(() => { if (modal.parentElement) modal.remove(); }, 250);
+    } else {
+      modal.remove();
     }
-    btn.disabled = !input.value.trim();
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  btn.addEventListener('click', sendMessage);
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Search
-// ═════════════════════════════════════════════════════════════════════════════
-
-function initSearch() {
-  const s = document.getElementById('tg-search');
-  s.addEventListener('input', (e) => {
-    state.filter = e.target.value;
-    renderThreadList();
-  });
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Mobile menu
-// ═════════════════════════════════════════════════════════════════════════════
-
-function initMobile() {
-  const menuBtn = document.getElementById('tg-menu-btn');
-  const sidebar = document.getElementById('tg-sidebar');
-  const backdrop = document.getElementById('tg-sidebar-backdrop');
-
-  function open() {
-    sidebar.classList.add('open');
-    backdrop.classList.add('show');
   }
-  function close() {
-    sidebar.classList.remove('open');
-    backdrop.classList.remove('show');
-  }
-
-  menuBtn.addEventListener('click', () => {
-    sidebar.classList.contains('open') ? close() : open();
-  });
-  backdrop.addEventListener('click', close);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Boot
-// ═════════════════════════════════════════════════════════════════════════════
-
-async function boot() {
-  // Load threads
-  const res = await MockAPI.getThreads();
-  if (res.ok) {
-    state.threads = res.result;
-  }
-
-  initSearch();
-  initComposer();
-  initMobile();
-  renderThreadList();
-
-  // Optional: pre-select first thread
-  // if (state.threads[0]) selectThread(state.threads[0].id);
+export function isChatTelegramOpen() {
+  return _open;
 }
 
-boot();
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Real API migration helpers (commented — unwire MockAPI and use these)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/*
-async function fetchTelegram(method, params = {}) {
-  const url = new URL(`/api/telegram/${method}`, location.origin);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const r = await fetch(url, { credentials: 'same-origin' });
-  return r.json();
-}
-
-async function postTelegram(method, body = {}) {
-  const r = await fetch(`/api/telegram/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify(body),
-  });
-  return r.json();
-}
-
-// Then replace:
-//   MockAPI.getThreads()    → fetchTelegram('getChats')
-//   MockAPI.getMessages(id) → fetchTelegram('getMessages', { chat_id: id })
-//   MockAPI.sendMessage(...)→ postTelegram('sendMessage', { chat_id, text })
-*/
+// Default export for legacy import patterns
+const chatTelegramModule = { openChatTelegram, closeChatTelegram, isChatTelegramOpen };
+export default chatTelegramModule;

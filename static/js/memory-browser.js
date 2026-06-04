@@ -1,432 +1,515 @@
 /**
- * Memory Browser — Search & browse across memory sources
- *
- * Sources supported (mock data for now):
- *   - Obsidian Vault      → ~/workspace/obsidian/
- *   - Qdrant RAG          → localhost:6333
- *   - Session Logs        → local session transcripts
- *
- * Theme: Work Daddy (bg: #1A1A1A, panel: #235E36, text: #F9EBDC,
- *        accent: #A8E10C, border: #FAAFCC)
+ * Memory Browser — floating modal for cross-source memory search
+ * Follows Odysseus modal pattern (see tasks.js, agent-dashboard.js)
  */
 
-// ═══════════════════════════════════════
-// Mock Data
-// ═══════════════════════════════════════
+import { makeWindowDraggable } from './windowDrag.js';
 
-const MOCK_MEMORIES = [
+const API_BASE = window.location.origin;
+let _open = false;
+let _results = [];
+let _recent = [];
+let _activeFilter = 'all';
+let _searchQuery = '';
+let _stats = null;
+let _escHandler = null;
+
+// ── Mock data (Phase 1) — replace with real API in Phase 2 ──
+const _mockResults = [
   {
-    id: 'obs-001',
+    id: 'obs-1',
+    title: 'Perri Chase CIRS Protocol',
+    snippet: 'Chronic Inflammatory Response Syndrome treatment protocol including binders, nasal spray, and environmental remediation steps.',
     source: 'obsidian',
     sourceLabel: 'Obsidian Vault',
-    file: 'memory/2026-05-30.md',
-    excerpt: 'Kellen decided to pivot the \u003cmark\u003eMLB RAG Pipeline\u003c/mark\u003e from Pinecone to Qdrant after benchmarking showed 3x faster ingestion. Perri approved the change. Need to migrate existing embeddings before July.',
-    relevance: 0.94,
-    timestamp: 1717099200,
+    date: '2026-05-28T14:32:00Z',
+    path: 'Health/Perri/CIRS Protocol.md',
+    tags: ['health', 'cirs', 'perri']
   },
   {
-    id: 'obs-002',
+    id: 'obs-2',
+    title: 'Team Chase LLC Tech Stack',
+    snippet: 'CRM: HubSpot | Checkout: SamCart | Web: ShowIt | Integration: Zapier | Community: Mighty Networks | Video: Vimeo',
     source: 'obsidian',
     sourceLabel: 'Obsidian Vault',
-    file: 'projects/warrior-dog.md',
-    excerpt: 'Scarlet completed level 1 sprite animation for \u003cmark\u003eWarrior Dog\u003c/mark\u003e. Next: outfit select screen + attack mechanics. Using Phaser 3.6. Need asset pack from Kenney oritch.',
-    relevance: 0.87,
-    timestamp: 1717102800,
+    date: '2026-04-12T09:15:00Z',
+    path: 'Business/Team Chase/Tech Stack.md',
+    tags: ['business', 'tech-stack']
   },
   {
-    id: 'qdr-001',
+    id: 'rag-1',
+    title: 'Magic Led Business — Course Outline',
+    snippet: 'Module 1: Permission & Presence | Module 2: Embodied Decision Making | Module 3: Sovereign Sales | Module 4: Magnetic Messaging',
     source: 'qdrant',
-    sourceLabel: 'Qdrant RAG',
-    file: 'collection: magic-led-business',
-    excerpt: 'Module 4 transcript chunk: "The \u003cmark\u003eMagic Led\u003c/mark\u003e approach isn't about forcing outcomes—it's about noticing what already wants to happen. Your business is a living system."',
-    relevance: 0.91,
-    timestamp: 1717178400,
+    sourceLabel: 'Qdrant (RAG)',
+    date: '2026-05-20T11:00:00Z',
+    path: 'courses/magic-led-business/outline',
+    score: 0.94,
+    tags: ['course', 'perri', 'magic-led']
   },
   {
-    id: 'qdr-002',
+    id: 'rag-2',
+    title: 'Chiron System Architecture',
+    snippet: 'OpenClaw agent running on Watchtower (headless MacBook Pro). Telegram-first interface. Modular skill system with SKILL.md pattern.',
     source: 'qdrant',
-    sourceLabel: 'Qdrant RAG',
-    file: 'collection: magic-led-business',
-    excerpt: 'FAQ embedding #42: "How do I know if I'm intuition-led or fear-led?" — Answer distinguishes somatic \u003cmark\u003efear\u003c/mark\u003e (constricted chest) vs. intuitive expansion (open, grounded).',
-    relevance: 0.85,
-    timestamp: 1717264800,
+    sourceLabel: 'Qdrant (RAG)',
+    date: '2026-05-15T16:45:00Z',
+    path: 'ai/chiron/architecture',
+    score: 0.91,
+    tags: ['ai', 'chiron', 'architecture']
   },
   {
-    id: 'ses-001',
-    source: 'session',
-    sourceLabel: 'Session Log',
-    file: 'session-2026-06-03T14:22.log',
-    excerpt: 'User asked about SamCart checkout flow integration. \u003cmark\u003eSamCart\u003c/mark\u003e webhook to Zapier to Mighty Networks is confirmed working. Next: add upsell tracking in HubSpot.',
-    relevance: 0.82,
-    timestamp: 1717441200,
+    id: 'log-1',
+    title: 'Session 2026-05-30 — Linear API Integration',
+    snippet: 'Successfully integrated Linear API for task board. OAuth flow completed. Issues syncing from TEA and WD projects.',
+    source: 'session_log',
+    sourceLabel: 'Session Logs',
+    date: '2026-05-30T18:22:00Z',
+    path: 'sessions/2026-05-30-linear-integration.log',
+    tags: ['dev', 'linear', 'api']
   },
   {
-    id: 'ses-002',
-    source: 'session',
-    sourceLabel: 'Session Log',
-    file: 'session-2026-06-03T16:45.log',
-    excerpt: 'Kellen requested a new skill for \u003cmark\u003eGTM/GA4 tracking\u003c/mark\u003e verification. Discussed using Playwright MCP to check tag firing on perrichase.com checkout pages.',
-    relevance: 0.78,
-    timestamp: 1717449900,
+    id: 'log-2',
+    title: 'Session 2026-05-28 — Fabio OAuth Setup',
+    snippet: 'Configured Fabio agent with Gmail OAuth. Delegation for support@perrichase.com granted. Token propagation verified.',
+    source: 'session_log',
+    sourceLabel: 'Session Logs',
+    date: '2026-05-28T13:10:00Z',
+    path: 'sessions/2026-05-28-fabio-oauth.log',
+    tags: ['dev', 'fabio', 'oauth']
   },
   {
-    id: 'obs-003',
+    id: 'daily-1',
+    title: '2026-05-30 — Daily Note',
+    snippet: 'Completed Linear API wiring for task board. Morning briefing skill running. Archie PT scheduled for next week.',
+    source: 'daily_note',
+    sourceLabel: 'Daily Notes',
+    date: '2026-05-30T07:00:00Z',
+    path: 'memory/2026-05-30.md',
+    tags: ['daily', 'archie', 'linear']
+  },
+  {
+    id: 'daily-2',
+    title: '2026-05-28 — Daily Note',
+    snippet: 'Mexico trip planning. Packing list finalized. Dog sitter briefed on Archie post-surgery limitations. Perri CIRS flare subsiding.',
+    source: 'daily_note',
+    sourceLabel: 'Daily Notes',
+    date: '2026-05-28T07:00:00Z',
+    path: 'memory/2026-05-28.md',
+    tags: ['daily', 'mexico', 'archie', 'perri']
+  },
+  {
+    id: 'obs-3',
+    title: 'Scarlet Jiu Jitsu Competition Calendar',
+    snippet: 'JJWL June 19, 2026 — registered on Smoothcomp. NAGA July 15. Goal: 4 competitions per year. Coach: Tim.',
     source: 'obsidian',
     sourceLabel: 'Obsidian Vault',
-    file: 'daily/2026-06-02.md',
-    excerpt: 'Morning briefing generated. Markets: S\u0026P flat, BTC +2.4%. \u003cmark\u003eAI news\u003c/mark\u003e: Gemini 2.5 Pro preview, OpenAI Agents SDK update. No urgent emails. Calendar clear until 2pm coaching call.',
-    relevance: 0.75,
-    timestamp: 1717344000,
+    date: '2026-05-25T10:00:00Z',
+    path: 'Family/Scarlet/Jiu Jitsu.md',
+    tags: ['scarlet', 'jiu-jitsu', 'competition']
   },
   {
-    id: 'qdr-003',
+    id: 'rag-3',
+    title: 'Permission Studios — Product Roadmap',
+    snippet: 'Q3 2026: The Perfect Cut MVP. Q4: MLB RAG Pipeline production. 2027 Q1: AI Admin Agent full automation.',
     source: 'qdrant',
-    sourceLabel: 'Qdrant RAG',
-    file: 'collection: permission-school',
-    excerpt: 'Cohort 3 onboarding script: Welcome flow should reference their \u003cmark\u003eChrysalis\u003c/mark\u003e stage (Egg → Caterpillar → Butterfly). Do NOT send full curriculum on day 1.',
-    relevance: 0.88,
-    timestamp: 1717351200,
-  },
-  {
-    id: 'ses-003',
-    source: 'session',
-    sourceLabel: 'Session Log',
-    file: 'session-2026-06-02T09:15.log',
-    excerpt: 'System check: OpenClaw gateway healthy. Telegram bot latency ~120ms. \u003cmark\u003eWatchtower\u003c/mark\u003e disk at 62%. No failed cron jobs in last 24h. Scheduled task queue: 3 pending.',
-    relevance: 0.71,
-    timestamp: 1717328100,
-  },
-  {
-    id: 'obs-004',
-    source: 'obsidian',
-    sourceLabel: 'Obsidian Vault',
-    file: 'family/joyce-visit.md',
-    excerpt: 'Joyce \u0026 Geoff visiting May 8–15, 2026. United conf: PZQ11V. Joyce needs wheelchair assistance at airport—already requested. \u003cmark\u003eArchie\u003c/mark\u003e PT: call hydro treadmill places before trip.',
-    relevance: 0.69,
-    timestamp: 1714502400,
-  },
-  {
-    id: 'obs-005',
-    source: 'obsidian',
-    sourceLabel: 'Obsidian Vault',
-    file: 'perri/cirs-protocol.md',
-    excerpt: 'Dr. Dorninger protocol: binders 30 min before meals, no sauna after 2pm. \u003cmark\u003eCIRS\u003c/mark\u003e supplements in pill organizer. Perri's VCS test: 7 misses this week (improvement from 12).',
-    relevance: 0.73,
-    timestamp: 1716854400,
-  },
-  {
-    id: 'qdr-004',
-    source: 'qdrant',
-    sourceLabel: 'Qdrant RAG',
-    file: 'collection: gsm-archive',
-    excerpt: 'GSM Call 2026-05-28 transcript: Perri on "receiving mode" — "The body knows before the mind. \u003cmark\u003ePractice\u003c/mark\u003e dropping from head to heart before any decision today."',
-    relevance: 0.90,
-    timestamp: 1716921600,
-  },
-  {
-    id: 'ses-004',
-    source: 'session',
-    sourceLabel: 'Session Log',
-    file: 'session-2026-06-01T11:30.log',
-    excerpt: 'Kellen: "Can we make the \u003cmark\u003ememory browser\u003c/mark\u003e feel less like a database and more like a second brain?" Agreed on card-based layout with source badges and relevance bars.',
-    relevance: 0.95,
-    timestamp: 1717251000,
-  },
-  {
-    id: 'obs-006',
-    source: 'obsidian',
-    sourceLabel: 'Obsidian Vault',
-    file: 'trading/series57-study.md',
-    excerpt: 'Knopman Marks \u003cmark\u003eSeries 57\u003c/mark\u003e: Completed Unit 4 (Market Making). Mock exam: 82%. Weak area: options greeks in multi-leg strategies. Review before scheduling real exam.',
-    relevance: 0.66,
-    timestamp: 1716336000,
-  },
+    sourceLabel: 'Qdrant (RAG)',
+    date: '2026-05-10T09:00:00Z',
+    path: 'products/permission-studios/roadmap',
+    score: 0.88,
+    tags: ['product', 'roadmap', 'permission-studios']
+  }
 ];
 
-// ═══════════════════════════════════════
-// State
-// ═══════════════════════════════════════
+const _mockRecent = _mockResults.slice(0, 5);
 
-let currentFilter = 'all';
-let currentSort = 'relevance';
-let currentQuery = '';
-let filteredResults = [];
-
-// ═══════════════════════════════════════
-// DOM Refs
-// ═══════════════════════════════════════
-
-const els = {
-  searchInput: document.getElementById('mb-search-input'),
-  filterPills: document.querySelectorAll('.mb-filter-pill'),
-  resultsList: document.getElementById('mb-results-list'),
-  resultsCount: document.getElementById('mb-results-count'),
-  sortSelect: document.getElementById('mb-sort-select'),
-  recentList: document.getElementById('mb-recent-list'),
-  statDocs: document.getElementById('mb-stat-docs'),
-  statSources: document.getElementById('mb-stat-sources'),
-  statIndexed: document.getElementById('mb-stat-indexed'),
+const _mockStats = {
+  totalMemories: 1247,
+  lastIndexed: '2026-06-04T12:00:00Z',
+  sources: {
+    obsidian: 623,
+    qdrant: 312,
+    session_log: 198,
+    daily_note: 114
+  }
 };
 
-// ═══════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════
+// ── Theme constants ──
+const THEME = {
+  bg: '#1A1A1A',
+  panel: '#235E36',
+  text: '#F9EBDC',
+  accent: '#A8E10C',
+  border: '#FAAFCC'
+};
 
-function formatTime(ts) {
-  const d = new Date(ts * 1000);
+// ── Helpers ──
+function _esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function _fmtDate(iso) {
+  const d = new Date(iso);
   const now = new Date();
   const diffMs = now - d;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function highlightQuery(text, query) {
-  if (!query.trim()) return text;
-  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return text.replace(re, '<mark>$1</mark>');
+function _sourceIcon(source) {
+  const icons = {
+    obsidian: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+    qdrant: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
+    session_log: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    daily_note: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`
+  };
+  return icons[source] || icons.obsidian;
 }
 
-function getSourceIconClass(source) {
-  return {
-    obsidian: 'mb-source-obsidian',
-    qdrant: 'mb-source-qdrant',
-    session: 'mb-source-session',
-  }[source] || 'mb-source-obsidian';
+function _sourceColor(source) {
+  const colors = {
+    obsidian: '#B2EAEA',
+    qdrant: '#A8E10C',
+    session_log: '#FAAFCC',
+    daily_note: '#F9EBDC'
+  };
+  return colors[source] || '#F9EBDC';
 }
 
-function getSourceInitial(source) {
-  return {
-    obsidian: 'Ob',
-    qdrant: 'Qd',
-    session: 'Se',
-  }[source] || '??';
+// ── Data fetching (mock for now) ──
+async function _fetchMemories() {
+  // Phase 2: replace with real fetch:
+  // const res = await fetch(`${API_BASE}/api/memory/search?q=${encodeURIComponent(_searchQuery)}&source=${_activeFilter}`);
+  // _results = await res.json();
+  _results = [..._mockResults];
+  _recent = [..._mockRecent];
+  _stats = { ..._mockStats };
 }
 
-// ═══════════════════════════════════════
-// Stats
-// ═══════════════════════════════════════
-
-function updateStats() {
-  els.statDocs.textContent = MOCK_MEMORIES.length;
-
-  const sources = new Set(MOCK_MEMORIES.map(m => m.source));
-  els.statSources.textContent = sources.size;
-
-  const newest = Math.max(...MOCK_MEMORIES.map(m => m.timestamp));
-  els.statIndexed.textContent = formatTime(newest);
-}
-
-// ═══════════════════════════════════════
-// Recent Sidebar
-// ═══════════════════════════════════════
-
-function renderRecent() {
-  const recent = [...MOCK_MEMORIES]
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 5);
-
-  els.recentList.innerHTML = recent.map(item => `
-    <div class="mb-recent-item" data-id="${item.id}">
-      <div class="mb-recent-source">
-        <span class="mb-result-source-icon ${getSourceIconClass(item.source)}">${getSourceInitial(item.source)}</span>
-        ${item.sourceLabel}
-      </div>
-      <div class="mb-recent-excerpt">${item.excerpt.replace(/<mark>/g, '').replace(/<\/mark>/g, '')}</div>
-      <div class="mb-recent-time">${formatTime(item.timestamp)}</div>
-    </div>
-  `).join('');
-
-  // Click to search by that item's keywords
-  els.recentList.querySelectorAll('.mb-recent-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const id = el.dataset.id;
-      const item = MOCK_MEMORIES.find(m => m.id === id);
-      if (item) {
-        els.searchInput.value = item.excerpt.split(' ').slice(0, 3).join(' ');
-        els.searchInput.dispatchEvent(new Event('input'));
-      }
-    });
-  });
-}
-
-// ═══════════════════════════════════════
-// Results
-// ═══════════════════════════════════════
-
-function filterAndSort() {
-  let results = [...MOCK_MEMORIES];
-
-  // Filter by source
-  if (currentFilter !== 'all') {
-    results = results.filter(r => r.source === currentFilter);
+function _filterResults() {
+  let filtered = _results;
+  if (_activeFilter !== 'all') {
+    filtered = filtered.filter(r => r.source === _activeFilter);
   }
-
-  // Filter by query (search across file, excerpt, sourceLabel)
-  const q = currentQuery.trim().toLowerCase();
-  if (q) {
-    results = results.filter(r =>
-      r.file.toLowerCase().includes(q) ||
-      r.excerpt.toLowerCase().includes(q) ||
-      r.sourceLabel.toLowerCase().includes(q)
+  if (_searchQuery.trim()) {
+    const q = _searchQuery.toLowerCase();
+    filtered = filtered.filter(r =>
+      (r.title && r.title.toLowerCase().includes(q)) ||
+      (r.snippet && r.snippet.toLowerCase().includes(q)) ||
+      (r.tags && r.tags.some(t => t.toLowerCase().includes(q)))
     );
   }
-
-  // Sort
-  if (currentSort === 'relevance') {
-    results.sort((a, b) => b.relevance - a.relevance);
-  } else if (currentSort === 'newest') {
-    results.sort((a, b) => b.timestamp - a.timestamp);
-  } else if (currentSort === 'oldest') {
-    results.sort((a, b) => a.timestamp - b.timestamp);
-  }
-
-  filteredResults = results;
-  renderResults();
+  return filtered;
 }
 
-function renderResults() {
-  const { resultsList, resultsCount } = els;
+// ── Rendering ──
+function _renderStats(container) {
+  if (!_stats) return;
+  const s = _stats;
+  const el = document.createElement('div');
+  el.style.cssText = `display:flex;gap:16px;align-items:center;padding:10px 14px;background:${THEME.panel}22;border:1px solid ${THEME.border}33;border-radius:8px;margin-bottom:14px;`;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="font-size:18px;font-weight:700;color:${THEME.accent};">${s.totalMemories.toLocaleString()}</span>
+      <span style="font-size:11px;opacity:0.6;">total memories</span>
+    </div>
+    <div style="width:1px;height:20px;background:${THEME.border}44;"></div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="font-size:11px;opacity:0.6;">Last indexed:</span>
+      <span style="font-size:11px;font-weight:500;">${_fmtDate(s.lastIndexed)}</span>
+    </div>
+    <div style="width:1px;height:20px;background:${THEME.border}44;"></div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      ${Object.entries(s.sources).map(([src, count]) => `
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:${_sourceColor(src)};"></span>
+          ${_esc({obsidian:'Obsidian',qdrant:'Qdrant',session_log:'Logs',daily_note:'Daily'}[src]||src)} ${count}
+        </span>
+      `).join('')}
+    </div>
+  `;
+  container.innerHTML = '';
+  container.appendChild(el);
+}
 
-  if (filteredResults.length === 0) {
-    resultsCount.textContent = 'No results';
-    resultsList.innerHTML = `
-      <div class="mb-empty">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          <line x1="8" y1="11" x2="14" y2="11"/>
-        </svg>
-        <p>No memories match your search.</p>
-        <p style="font-size:0.75rem;margin-top:4px;">Try a different keyword or switch filters.</p>
-      </div>
+function _renderFilterTabs(container) {
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'obsidian', label: 'Obsidian Vault' },
+    { id: 'qdrant', label: 'Qdrant (RAG)' },
+    { id: 'session_log', label: 'Session Logs' },
+    { id: 'daily_note', label: 'Daily Notes' }
+  ];
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;';
+
+  tabs.forEach(t => {
+    const btn = document.createElement('button');
+    const active = t.id === _activeFilter;
+    btn.style.cssText = `
+      padding:5px 12px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;
+      border:1px solid ${active ? THEME.accent : THEME.border + '44'};
+      background:${active ? THEME.accent + '22' : 'transparent'};
+      color:${active ? THEME.accent : THEME.text};
+      transition:all 0.15s;
     `;
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      _activeFilter = t.id;
+      _render();
+    });
+    wrap.appendChild(btn);
+  });
+
+  container.innerHTML = '';
+  container.appendChild(wrap);
+}
+
+function _renderResults(container) {
+  const filtered = _filterResults();
+  if (!filtered.length) {
+    container.innerHTML = `<div style="opacity:0.4;font-size:12px;text-align:center;padding:40px 0;">No memories found.</div>`;
     return;
   }
 
-  resultsCount.textContent = `${filteredResults.length} result${filteredResults.length !== 1 ? 's' : ''}`;
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
-  resultsList.innerHTML = filteredResults.map(item => {
-    const excerpt = highlightQuery(item.excerpt, currentQuery);
-    const relPct = Math.round(item.relevance * 100);
-    return `
-      <div class="mb-result-card" data-id="${item.id}">
-        <div class="mb-result-header">
-          <div class="mb-result-source">
-            <span class="mb-result-source-icon ${getSourceIconClass(item.source)}">${getSourceInitial(item.source)}</span>
-            ${item.sourceLabel}
-          </div>
-          <div class="mb-result-meta">
-            <span class="mb-relevance">
-              <span class="mb-relevance-bar"><span class="mb-relevance-fill" style="width:${relPct}%"></span></span>
-              ${relPct}%
-            </span>
-            <span>${formatTime(item.timestamp)}</span>
-          </div>
-        </div>
-        <div class="mb-result-excerpt">${excerpt}</div>
-        <div class="mb-result-path">${item.file}</div>
-      </div>
+  for (const r of filtered) {
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:${THEME.panel}18;border:1px solid ${THEME.border}33;border-radius:8px;
+      padding:12px;cursor:pointer;transition:all 0.15s;
     `;
-  }).join('');
-}
-
-// ═══════════════════════════════════════
-// Event Handlers
-// ═══════════════════════════════════════
-
-function init() {
-  // Search input
-  els.searchInput.addEventListener('input', (e) => {
-    currentQuery = e.target.value;
-    filterAndSort();
-  });
-
-  // Filter pills
-  els.filterPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      els.filterPills.forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      currentFilter = pill.dataset.filter;
-      filterAndSort();
+    card.addEventListener('mouseenter', () => {
+      card.style.borderColor = THEME.border + '88';
+      card.style.background = THEME.panel + '30';
     });
-  });
+    card.addEventListener('mouseleave', () => {
+      card.style.borderColor = THEME.border + '33';
+      card.style.background = THEME.panel + '18';
+    });
 
-  // Sort
-  els.sortSelect.addEventListener('change', (e) => {
-    currentSort = e.target.value;
-    filterAndSort();
-  });
+    const srcColor = _sourceColor(r.source);
+    const scoreBadge = r.score ? `<span style="font-size:10px;background:${srcColor}22;color:${srcColor};padding:2px 6px;border-radius:4px;margin-left:6px;">score ${r.score}</span>` : '';
 
-  // Initial render
-  updateStats();
-  renderRecent();
-  filterAndSort();
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="color:${srcColor};display:flex;align-items:center;">${_sourceIcon(r.source)}</span>
+        <span style="font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.5px;">${_esc(r.sourceLabel)}</span>
+        <span style="margin-left:auto;font-size:10px;opacity:0.4;">${_fmtDate(r.date)}</span>
+      </div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.4;">${_esc(r.title)}</div>
+      <div style="font-size:12px;opacity:0.7;line-height:1.5;margin-bottom:8px;">${_esc(r.snippet)}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        ${r.tags.map(tag => `<span style="font-size:10px;background:${THEME.bg};padding:2px 6px;border-radius:4px;opacity:0.5;">#${_esc(tag)}</span>`).join('')}
+        ${scoreBadge}
+      </div>
+      <div style="font-size:10px;opacity:0.35;margin-top:6px;font-family:monospace;">${_esc(r.path)}</div>
+    `;
+    grid.appendChild(card);
+  }
+
+  container.innerHTML = '';
+  container.appendChild(grid);
 }
 
-// ═══════════════════════════════════════
-// Future Integration Hooks (stubbed)
-// ═══════════════════════════════════════
+function _renderRecent(container) {
+  if (!_recent.length) {
+    container.innerHTML = `<div style="opacity:0.4;font-size:11px;text-align:center;padding:20px 0;">No recent memories.</div>`;
+    return;
+  }
 
-/**
- * Load memories from the local Obsidian vault.
- * Expected: read markdown files from ~/workspace/obsidian/,
- * extract frontmatter + body chunks, return array matching MOCK_MEMORIES shape.
- */
-export async function loadObsidianMemories() {
-  // TODO: Call backend endpoint /api/memory/obsidian or read via File System Access
-  // return fetch('/api/memory/obsidian').then(r => r.json());
-  throw new Error('Obsidian integration not yet wired');
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+  for (const r of _recent) {
+    const item = document.createElement('div');
+    item.style.cssText = `
+      padding:8px 10px;border-radius:6px;cursor:pointer;
+      background:transparent;border:1px solid transparent;
+      transition:all 0.15s;
+    `;
+    item.addEventListener('mouseenter', () => {
+      item.style.background = THEME.panel + '22';
+      item.style.borderColor = THEME.border + '33';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.background = 'transparent';
+      item.style.borderColor = 'transparent';
+    });
+
+    const srcColor = _sourceColor(r.source);
+    item.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+        <span style="color:${srcColor};display:flex;align-items:center;">${_sourceIcon(r.source)}</span>
+        <span style="font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">${_esc(r.title)}</span>
+      </div>
+      <div style="font-size:10px;opacity:0.4;padding-left:18px;">${_fmtDate(r.date)} · ${_esc(r.sourceLabel)}</div>
+    `;
+    list.appendChild(item);
+  }
+
+  container.innerHTML = '';
+  container.appendChild(list);
 }
 
-/**
- * Search Qdrant vector DB via the local API.
- * Expected: POST localhost:6333/collections/{name}/points/search
- * with the query vector and limit.
- */
-export async function searchQdrant(collection, vector, limit = 10) {
-  // TODO: Wire to Qdrant REST API or backend proxy
-  // const res = await fetch(`http://localhost:6333/collections/${collection}/points/search`, { method: 'POST', body: JSON.stringify({ vector, limit }) });
-  // return res.json();
-  throw new Error('Qdrant integration not yet wired');
+function _render() {
+  const body = document.getElementById('memory-browser-body');
+  if (!body) return;
+
+  const filtered = _filterResults();
+  const countEl = document.getElementById('memory-browser-count');
+  if (countEl) {
+    countEl.textContent = `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+  }
+
+  // Build layout: left = search + results, right = recent sidebar
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:14px;height:100%;overflow:hidden;';
+
+  // Left column
+  const left = document.createElement('div');
+  left.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:0;overflow:auto;';
+
+  // Stats bar
+  const statsWrap = document.createElement('div');
+  statsWrap.id = 'memory-browser-stats';
+  left.appendChild(statsWrap);
+
+  // Filter tabs
+  const filterWrap = document.createElement('div');
+  filterWrap.id = 'memory-browser-filters';
+  left.appendChild(filterWrap);
+
+  // Results
+  const resultsWrap = document.createElement('div');
+  resultsWrap.id = 'memory-browser-results';
+  resultsWrap.style.cssText = 'flex:1;min-height:0;overflow:auto;padding-right:4px;';
+  left.appendChild(resultsWrap);
+
+  // Right sidebar
+  const right = document.createElement('div');
+  right.style.cssText = `
+    width:220px;flex-shrink:0;display:flex;flex-direction:column;
+    border-left:1px solid ${THEME.border}33;padding-left:14px;
+    overflow:hidden;
+  `;
+
+  const recentHeader = document.createElement('div');
+  recentHeader.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.5;margin-bottom:10px;';
+  recentHeader.textContent = 'Recent Memories';
+  right.appendChild(recentHeader);
+
+  const recentWrap = document.createElement('div');
+  recentWrap.id = 'memory-browser-recent';
+  recentWrap.style.cssText = 'flex:1;overflow:auto;';
+  right.appendChild(recentWrap);
+
+  wrap.appendChild(left);
+  wrap.appendChild(right);
+
+  body.innerHTML = '';
+  body.appendChild(wrap);
+
+  _renderStats(statsWrap);
+  _renderFilterTabs(filterWrap);
+  _renderResults(resultsWrap);
+  _renderRecent(recentWrap);
 }
 
-/**
- * Load recent session logs.
- * Expected: read from local session log directory or backend /api/sessions/logs
- */
-export async function loadSessionLogs() {
-  // TODO: Backend endpoint or local file glob
-  // return fetch('/api/sessions/logs?limit=50').then(r => r.json());
-  throw new Error('Session log integration not yet wired');
+// ── Public API ──
+export function openMemoryBrowser() {
+  if (_open) return;
+  _open = true;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'memory-browser-modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="width:900px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;">
+      <div class="modal-header">
+        <h4 style="position:relative;top:-2px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px">
+            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+            <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>
+          </svg>
+          Memory Browser
+        </h4>
+        <span style="flex:1"></span>
+        <span id="memory-browser-count" style="font-size:11px;opacity:0.6;margin-right:12px;">0 results</span>
+        <button class="close-btn" id="memory-browser-close">✖</button>
+      </div>
+      <div style="padding:12px 16px 0;border-bottom:1px solid var(--border);">
+        <div style="position:relative;margin-bottom:10px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:0.4;">
+            <circle cx="10" cy="10" r="7"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" id="memory-browser-search" placeholder="Search across all memory sources..."
+            style="width:100%;padding:8px 10px 8px 32px;border-radius:6px;border:1px solid ${THEME.border}44;background:${THEME.bg};color:${THEME.text};font-size:13px;outline:none;box-sizing:border-box;"
+            value="${_esc(_searchQuery)}"
+          />
+        </div>
+      </div>
+      <div class="modal-body" id="memory-browser-body" style="flex:1;overflow:hidden;padding:14px 16px;"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Draggable
+  {
+    const c = modal.querySelector('.modal-content');
+    const h = modal.querySelector('.modal-header');
+    if (c && h) makeWindowDraggable(modal, { content: c, header: h });
+  }
+
+  // Close handlers
+  document.getElementById('memory-browser-close').addEventListener('click', closeMemoryBrowser);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeMemoryBrowser(); });
+
+  // Search input
+  const searchInput = document.getElementById('memory-browser-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      _searchQuery = e.target.value;
+      _render();
+    });
+    searchInput.focus();
+  }
+
+  // ESC handler
+  _escHandler = (e) => { if (e.key === 'Escape') closeMemoryBrowser(); };
+  document.addEventListener('keydown', _escHandler);
+
+  // Load data and render
+  _fetchMemories().then(() => _render());
 }
 
-/**
- * Refresh all sources and re-index.
- * Called manually or on a schedule.
- */
-export async function refreshAll() {
-  // TODO: Parallel load from all three sources, merge, de-duplicate, re-render
-  // const [obsidian, qdrant, sessions] = await Promise.allSettled([
-  //   loadObsidianMemories(),
-  //   searchQdrant(...),
-  //   loadSessionLogs()
-  // ]);
-  console.log('Refresh all — not yet implemented');
+export function closeMemoryBrowser() {
+  if (!_open) return;
+  _open = false;
+  if (_escHandler) { document.removeEventListener('keydown', _escHandler); _escHandler = null; }
+  const modal = document.getElementById('memory-browser-modal');
+  if (modal) {
+    const c = modal.querySelector('.modal-content');
+    if (c) {
+      c.classList.add('modal-closing');
+      c.addEventListener('animationend', () => modal.remove(), { once: true });
+      setTimeout(() => { if (modal.parentElement) modal.remove(); }, 250);
+    } else {
+      modal.remove();
+    }
+  }
 }
 
-// ═══════════════════════════════════════
-// Boot
-// ═══════════════════════════════════════
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+export function isMemoryBrowserOpen() {
+  return _open;
 }

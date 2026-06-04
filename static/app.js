@@ -42,6 +42,9 @@ import ttsModule from './js/tts-ai.js';
 import spinnerModule from './js/spinner.js';
 import agentDashboardModule from './js/agent-dashboard.js';
 import taskBoardModule from './js/task-board.js';
+import agentCalendarModule from './js/calendar-agent.js';
+import * as memoryBrowserModule from './js/memory-browser.js';
+import * as chatTelegramModule from './js/chat-telegram.js';
 import { initKeyboardShortcuts } from './js/keyboard-shortcuts.js';
 import { initSidebarLayout, syncRailSide } from './js/sidebar-layout.js';
 import { initSectionCollapse, initSectionDrag } from './js/section-management.js';
@@ -54,6 +57,8 @@ window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
 window.agentDashboardModule = agentDashboardModule;
 window.taskBoardModule = taskBoardModule;
+window.agentCalendarModule = agentCalendarModule;
+window.memoryBrowserModule = memoryBrowserModule;
 
 // Redirect to login on 401 from any fetch
 const _origFetch = window.fetch;
@@ -898,12 +903,42 @@ function initializeEventListeners() {
     });
   }
 
+  // Memory Browser buttons (sidebar + rail)
+  const memBrowserBtns = [el('rail-memory-browser'), el('tool-memory-browser-btn')].filter(Boolean);
+  memBrowserBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (memoryBrowserModule) {
+        memoryBrowserModule.isMemoryBrowserOpen() ? memoryBrowserModule.closeMemoryBrowser() : memoryBrowserModule.openMemoryBrowser();
+      }
+    });
+  });
+
+  // Agent Calendar button (sidebar + rail)
+  const agentCalendarBtns = [el('rail-agent-calendar'), el('tool-agent-calendar-btn')].filter(Boolean);
+  agentCalendarBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (agentCalendarModule) {
+        agentCalendarModule.isAgentCalendarOpen() ? agentCalendarModule.closeAgentCalendar() : agentCalendarModule.openAgentCalendar();
+      }
+    });
+  });
+
   // Tasks tool button (Odysseus built-in scheduled prompts)
   const toolTasksBtn = el('tool-tasks-btn');
   if (toolTasksBtn) {
     toolTasksBtn.addEventListener('click', () => {
       if (tasksModule) {
         tasksModule.isTasksOpen() ? tasksModule.closeTasks() : tasksModule.openTasks();
+      }
+    });
+  }
+
+  // Telegram Chat widget button
+  const toolChatBtn = el('tool-chat-btn');
+  if (toolChatBtn) {
+    toolChatBtn.addEventListener('click', () => {
+      if (chatTelegramModule) {
+        chatTelegramModule.isChatTelegramOpen() ? chatTelegramModule.closeChatTelegram() : chatTelegramModule.openChatTelegram();
       }
     });
   }
@@ -1060,8 +1095,11 @@ function initializeEventListeners() {
     '/memory':   () => document.getElementById('tool-memory-btn')?.click(),
     '/gallery':  () => document.getElementById('tool-gallery-btn')?.click(),
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
+    '/chat':     () => document.getElementById('tool-chat-btn')?.click(),
     '/agents':   () => document.getElementById('tool-agents-btn')?.click(),
+    '/calendar-agent': () => document.getElementById('tool-agent-calendar-btn')?.click(),
     '/taskboard': () => document.getElementById('tool-task-board-btn')?.click(),
+    '/memorybrowser': () => document.getElementById('tool-memory-browser-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
   };
   const _opener = _routeOpen[urlPath];
@@ -2425,6 +2463,8 @@ function initializeEventListeners() {
     'tool-memory':         '#tool-memory-btn',
     'tool-notes':          '#tool-notes-btn',
     'tool-tasks':          '#tool-tasks-btn',
+    'tool-chat':           '#tool-chat-btn',
+    'tool-agent-calendar':   '#tool-agent-calendar-btn',
     'tool-theme':          '#tool-theme-btn',
     'user-bar':            '#user-bar-profile',
     'sidebar-settings-btn':'#user-bar-settings',
@@ -3483,7 +3523,10 @@ function startOdysseusApp() {
     'rail-archive':   'tool-library-btn',
     'rail-gallery':   'tool-gallery-btn',
     'rail-tasks':     'tool-tasks-btn',
+    'rail-chat':      'tool-chat-btn',
     'rail-agents':    'tool-agents-btn',
+    'rail-agent-calendar': 'tool-agent-calendar-btn',
+    'rail-memory-browser': 'tool-memory-browser-btn',
     'rail-calendar':  'tool-calendar-btn',
     'rail-notes':     'tool-notes-btn',
     'rail-memory':    'tool-memory-btn',

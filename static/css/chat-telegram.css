@@ -1,0 +1,308 @@
+/* ============================================================
+   Telegram Chat Widget Styles — injected into style.css
+   Work Daddy theme: #1A1A1A bg, #235E36 panels, #F9EBDC text,
+   #A8E10C accent, #FAAFCC borders
+   ============================================================ */
+
+/* Modal frame */
+#chat-telegram-modal .chat-telegram-modal-content {
+  width: 900px;
+  max-width: 95vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+#chat-telegram-modal .modal-header {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Body: sidebar + main split */
+.chat-telegram-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Left sidebar — thread list */
+.chat-telegram-sidebar {
+  width: 240px;
+  min-width: 200px;
+  max-width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--bg, #1A1A1A);
+}
+
+.chat-telegram-thread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+.chat-telegram-thread:hover {
+  background: rgba(168, 225, 12, 0.06);
+}
+
+.chat-telegram-thread.active {
+  background: rgba(168, 225, 12, 0.12);
+}
+
+.chat-telegram-thread-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  border: 1.5px solid;
+}
+
+.chat-telegram-thread-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-telegram-thread-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.chat-telegram-thread-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg, #F9EBDC);
+}
+
+.chat-telegram-thread-time {
+  font-size: 10px;
+  opacity: 0.45;
+  flex-shrink: 0;
+  color: var(--fg, #F9EBDC);
+}
+
+.chat-telegram-thread-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.chat-telegram-thread-preview {
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg, #F9EBDC);
+}
+
+.chat-telegram-unread {
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent-primary, #A8E10C);
+  color: var(--bg, #1A1A1A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Main area */
+.chat-telegram-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel-bg, #235E36);
+}
+
+/* Message area */
+.chat-telegram-message-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-telegram-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  opacity: 0.7;
+}
+
+/* Message bubbles */
+.chat-telegram-bubble-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.chat-telegram-bubble-row.self {
+  justify-content: flex-end;
+}
+
+.chat-telegram-bubble {
+  max-width: 70%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  position: relative;
+  color: var(--fg, #F9EBDC);
+  background: var(--panel-bg, #1A1A1A);
+  border: 1px solid var(--border, #FAAFCC);
+}
+
+.chat-telegram-bubble-row.self .chat-telegram-bubble {
+  background: rgba(168, 225, 12, 0.15);
+  border-color: rgba(168, 225, 12, 0.35);
+}
+
+.chat-telegram-bubble-name {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.6;
+  margin-bottom: 3px;
+  color: var(--accent-primary, #A8E10C);
+}
+
+.chat-telegram-bubble-text {
+  margin-bottom: 2px;
+}
+
+.chat-telegram-bubble-time {
+  font-size: 10px;
+  opacity: 0.4;
+  text-align: right;
+}
+
+/* Composer */
+.chat-telegram-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg, #1A1A1A);
+  flex-shrink: 0;
+}
+
+.chat-telegram-input {
+  flex: 1;
+  background: var(--panel-bg, #235E36);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--fg, #F9EBDC);
+  outline: none;
+  font-family: inherit;
+}
+
+.chat-telegram-input::placeholder {
+  opacity: 0.4;
+  color: var(--fg, #F9EBDC);
+}
+
+.chat-telegram-input:focus {
+  border-color: var(--accent-primary, #A8E10C);
+}
+
+.chat-telegram-send {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-primary, #A8E10C);
+  color: var(--bg, #1A1A1A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.chat-telegram-send:hover {
+  opacity: 0.85;
+}
+
+.chat-telegram-send:active {
+  transform: scale(0.95);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  #chat-telegram-modal .chat-telegram-modal-content {
+    width: 100%;
+    max-width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .chat-telegram-body {
+    flex-direction: column;
+  }
+
+  .chat-telegram-sidebar {
+    width: 100%;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 40%;
+    flex-shrink: 0;
+  }
+
+  .chat-telegram-main {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-telegram-bubble {
+    max-width: 85%;
+  }
+}
+
+/* Ensure modal fills viewport on mobile like other tool modals */
+@media (max-width: 768px) {
+  #chat-telegram-modal .modal-content {
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+}
