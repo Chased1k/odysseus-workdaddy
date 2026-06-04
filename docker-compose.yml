@@ -71,7 +71,7 @@ services:
   chromadb:
     image: docker.io/chromadb/chroma:latest
     ports:
-      - "${CHROMADB_BIND:-127.0.0.1}:8100:8000"
+      - "${CHROMADB_BIND:-127.0.0.1}:8102:8000"
     volumes:
       - chromadb-data:/chroma/chroma
     environment:
@@ -99,7 +99,7 @@ services:
         fi
         exec /usr/local/searxng/entrypoint.sh
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - searxng-data:/etc/searxng
       - ./config/searxng/settings.yml:/tmp/searxng-settings.yml.template:ro,z

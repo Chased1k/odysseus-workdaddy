@@ -1540,6 +1540,16 @@ function initializeEventListeners() {
 
 // Voice recording is handled by the dual-purpose send/mic button (see below)
 
+  // ── Work Daddy navigation — open custom pages in new tabs ──
+  document.querySelectorAll('.workdaddy-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const page = item.dataset.page;
+      if (page) {
+        window.open(`/static/${page}.html`, '_blank');
+      }
+    });
+  });
+
   // ── Toggle persistence — delegates to Storage module ──
   function loadToggleState() {
     return Storage.loadToggleState();
