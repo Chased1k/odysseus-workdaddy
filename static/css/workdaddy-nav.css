@@ -1,0 +1,91 @@
+/* ── Work Daddy Shared Navigation ── */
+
+.workdaddy-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: #1A1A1A;
+  border-bottom: 2px solid #FAAFCC;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.workdaddy-nav-brand {
+  display: flex;
+  align-items: center;
+}
+
+.workdaddy-nav-logo {
+  color: #F9EBDC;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workdaddy-nav-logo:hover {
+  color: #A8E10C;
+}
+
+.workdaddy-nav-links {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.workdaddy-nav-link {
+  color: #F9EBDC;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.workdaddy-nav-link:hover {
+  background: rgba(168, 225, 12, 0.1);
+  color: #A8E10C;
+  border-color: rgba(168, 225, 12, 0.3);
+}
+
+.workdaddy-nav-link.active {
+  background: #235E36;
+  color: #A8E10C;
+  border-color: #A8E10C;
+  font-weight: 600;
+}
+
+/* Mobile: collapse to hamburger */
+@media (max-width: 640px) {
+  .workdaddy-nav {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+  }
+  
+  .workdaddy-nav-links {
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  
+  .workdaddy-nav-link {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+  }
+  
+  body {
+    padding-top: 90px !important;
+  }
+}
