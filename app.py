@@ -631,6 +631,10 @@ from routes.calendar_routes import setup_calendar_routes
 calendar_router = setup_calendar_routes()
 app.include_router(calendar_router)
 
+# Linear Integration (Work Daddy Task Board)
+from routes.linear_routes import router as linear_router
+app.include_router(linear_router)
+
 # Shell (user-facing command execution)
 from routes.shell_routes import setup_shell_routes
 app.include_router(setup_shell_routes())
