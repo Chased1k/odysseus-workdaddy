@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Memory Browser — Work Daddy</title>
+  <link rel="icon" type="image/png" href="/static/images/fabio-avatar.png">
+  <meta name="theme-color" content="#1A1A1A">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    /* ── Memory Browser Page Styles ── */
+    .memory-browser {
+      --mb-bg: #1A1A1A;
+      --mb-panel: #235E36;
+      --mb-text: #F9EBDC;
+      --mb-accent: #A8E10C;
+      --mb-border: #FAAFCC;
+      --mb-panel-dark: #1a3d24;
+      --mb-text-muted: #c9b8a8;
+      min-height: 100vh;
+      background: var(--mb-bg);
+      color: var(--mb-text);
+      font-family: var(--font-family, 'Fira Code', monospace);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .mb-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--mb-border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--mb-panel);
+    }
+    .mb-header h1 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--mb-accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mb-header h1 svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--mb-accent);
+    }
+    .mb-stats {
+      margin-left: auto;
+      display: flex;
+      gap: 20px;
+      font-size: 0.8rem;
+      color: var(--mb-text-muted);
+    }
+    .mb-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .mb-stat-value {
+      color: var(--mb-accent);
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    /* Main layout */
+    .mb-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .mb-sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--mb-panel-dark);
+      border-right: 1px solid var(--mb-border);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+    .mb-sidebar h3 {
+      margin: 0 0 8px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--mb-text-muted);
+      font-weight: 500;
+    }
+    .mb-recent-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(35, 94, 54, 0.4);
+      border: 1px solid rgba(250, 175, 204, 0.15);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-bottom: 8px;
+    }
+    .mb-recent-item:hover {
+      background: rgba(35, 94, 54, 0.7);
+      border-color: rgba(250, 175, 204, 0.4);
+    }
+    .mb-recent-source {
+      font-size: 0.7rem;
+      color: var(--mb-accent);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mb-recent-excerpt {
+      font-size: 0.8rem;
+      color: var(--mb-text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .mb-recent-time {
+      font-size: 0.65rem;
+      color: var(--mb-text-muted);
+      margin-top: 4px;
+    }
+
+    /* Content area */
+    .mb-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Search bar */
+    .mb-search-wrap {
+      padding: 20px 24px 0;
+    }
+    .mb-search-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--mb-panel);
+      border: 1.5px solid var(--mb-border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      transition: border-color 0.2s;
+    }
+    .mb-search-bar:focus-within {
+      border-color: var(--mb-accent);
+    }
+    .mb-search-bar svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--mb-text-muted);
+      flex-shrink: 0;
+    }
+    .mb-search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--mb-text);
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .mb-search-input::placeholder {
+      color: var(--mb-text-muted);
+    }
+    .mb-filter-pills {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .mb-filter-pill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(250, 175, 204, 0.3);
+      background: transparent;
+      color: var(--mb-text-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .mb-filter-pill:hover {
+      border-color: var(--mb-border);
+      color: var(--mb-text);
+    }
+    .mb-filter-pill.active {
+      background: var(--mb-accent);
+      color: var(--mb-bg);
+      border-color: var(--mb-accent);
+      font-weight: 600;
+    }
+
+    /* Results */
+    .mb-results {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px 24px;
+    }
+    .mb-results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .mb-results-count {
+      font-size: 0.8rem;
+      color: var(--mb-text-muted);
+    }
+    .mb-sort {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--mb-text-muted);
+    }
+    .mb-sort select {
+      background: var(--mb-panel);
+      color: var(--mb-text);
+      border: 1px solid var(--mb-border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    /* Result cards */
+    .mb-result-card {
+      background: var(--mb-panel);
+      border: 1px solid rgba(250, 175, 204, 0.2);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .mb-result-card:hover {
+      border-color: var(--mb-border);
+      box-shadow: 0 0 0 1px rgba(168, 225, 12, 0.1);
+    }
+    .mb-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .mb-result-source {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--mb-accent);
+      font-weight: 500;
+    }
+    .mb-result-source-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+    }
+    .mb-source-obsidian { background: #7c3aed; color: #fff; }
+    .mb-source-qdrant   { background: #dc2626; color: #fff; }
+    .mb-source-session  { background: #0891b2; color: #fff; }
+    .mb-result-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.7rem;
+      color: var(--mb-text-muted);
+    }
+    .mb-relevance {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(168, 225, 12, 0.12);
+      padding: 2px 8px;
+      border-radius: 10px;
+      color: var(--mb-accent);
+      font-weight: 500;
+    }
+    .mb-relevance-bar {
+      width: 40px;
+      height: 4px;
+      background: rgba(168, 225, 12, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .mb-relevance-fill {
+      height: 100%;
+      background: var(--mb-accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .mb-result-excerpt {
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--mb-text);
+    }
+    .mb-result-excerpt mark {
+      background: rgba(168, 225, 12, 0.25);
+      color: var(--mb-accent);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .mb-result-path {
+      margin-top: 10px;
+      font-size: 0.7rem;
+      color: var(--mb-text-muted);
+      font-family: 'Fira Code', monospace;
+      opacity: 0.7;
+    }
+
+    /* Empty state */
+    .mb-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--mb-text-muted);
+    }
+    .mb-empty svg {
+      width: 48px;
+      height: 48px;
+      stroke: var(--mb-border);
+      margin-bottom: 16px;
+    }
+
+    /* Scrollbar */
+    .mb-results::-webkit-scrollbar,
+    .mb-sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .mb-results::-webkit-scrollbar-track,
+    .mb-sidebar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .mb-results::-webkit-scrollbar-thumb,
+    .mb-sidebar::-webkit-scrollbar-thumb {
+      background: rgba(250, 175, 204, 0.25);
+      border-radius: 3px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .mb-sidebar { display: none; }
+      .mb-header { flex-wrap: wrap; }
+      .mb-stats { margin-left: 0; width: 100%; justify-content: flex-start; margin-top: 8px; }
+      .mb-search-wrap { padding: 12px 16px 0; }
+      .mb-results { padding: 12px 16px 16px; }
+    }
+  </style>
+</head>
+<body class="memory-browser">
+
+  <!-- Header -->
+  <header class="mb-header">
+    <h1>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M12 7v5l4 2"/>
+      </svg>
+      Memory Browser
+    </h1>
+    <div class="mb-stats">
+      <div class="mb-stat">
+        <span class="mb-stat-value" id="mb-stat-docs">0</span>
+        <span>Documents</span>
+      </div>
+      <div class="mb-stat">
+        <span class="mb-stat-value" id="mb-stat-sources">0</span>
+        <span>Sources</span>
+      </div>
+      <div class="mb-stat">
+        <span class="mb-stat-value" id="mb-stat-indexed">—</span>
+        <span>Last Indexed</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="mb-body">
+
+    <!-- Sidebar: Recent Memories -->
+    <aside class="mb-sidebar">
+      <div>
+        <h3>Recent Memories</h3>
+        <div id="mb-recent-list"></div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="mb-content">
+
+      <!-- Search -->
+      <div class="mb-search-wrap">
+        <div class="mb-search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" class="mb-search-input" id="mb-search-input" placeholder="Search across all memory sources..." autocomplete="off">
+        </div>
+        <div class="mb-filter-pills" id="mb-filter-pills">
+          <button class="mb-filter-pill active" data-filter="all">All Sources</button>
+          <button class="mb-filter-pill" data-filter="obsidian">Obsidian Vault</button>
+          <button class="mb-filter-pill" data-filter="qdrant">Qdrant RAG</button>
+          <button class="mb-filter-pill" data-filter="session">Session Logs</button>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="mb-results" id="mb-results">
+        <div class="mb-results-header">
+          <span class="mb-results-count" id="mb-results-count">Loading...</span>
+          <div class="mb-sort">
+            <span>Sort by</span>
+            <select id="mb-sort-select">
+              <option value="relevance">Relevance</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
+          </div>
+        </div>
+        <div id="mb-results-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <script type="module" src="/static/js/memory-browser.js"></script>
+</body>
+</html>
