@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Board — Odysseus</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    /* ── Task Board overrides ── */
+    .task-board-page {
+      background: #1A1A1A;
+      color: #F9EBDC;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .task-board-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #FAAFCC;
+      background: #1A1A1A;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .task-board-header h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #F9EBDC;
+    }
+    .task-board-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .task-board-controls select,
+    .task-board-controls button {
+      background: #235E36;
+      color: #F9EBDC;
+      border: 1px solid #FAAFCC;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .task-board-controls button.primary {
+      background: #A8E10C;
+      color: #1A1A1A;
+      border-color: #A8E10C;
+      font-weight: 600;
+    }
+    .task-board-controls button:hover {
+      opacity: 0.92;
+    }
+    .task-board-columns {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+      flex: 1;
+      overflow-x: auto;
+    }
+    .task-column {
+      min-width: 280px;
+      max-width: 320px;
+      flex: 1;
+      background: #235E36;
+      border: 1px solid #FAAFCC;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 120px);
+    }
+    .task-column-header {
+      padding: 10px 12px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #F9EBDC;
+      border-bottom: 1px solid #FAAFCC;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .task-column-header .count {
+      background: #1A1A1A;
+      color: #A8E10C;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .task-column-body {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .task-column-body.drag-over {
+      outline: 2px dashed #A8E10C;
+      outline-offset: -4px;
+      background: rgba(168, 225, 12, 0.06);
+    }
+    .task-card {
+      background: #1A1A1A;
+      border: 1px solid #FAAFCC;
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: grab;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      position: relative;
+    }
+    .task-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    .task-card.dragging {
+      opacity: 0.6;
+      cursor: grabbing;
+    }
+    .task-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .task-priority {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .task-priority.high   { background: #ff4d4d; color: #1A1A1A; }
+    .task-priority.medium { background: #ffcc00; color: #1A1A1A; }
+    .task-priority.low    { background: #A8E10C; color: #1A1A1A; }
+    .task-priority.urgent { background: #ff1a1a; color: #fff; }
+    .task-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.25;
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+    .task-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #FAAFCC;
+    }
+    .task-assignee {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .task-assignee-avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #A8E10C;
+      color: #1A1A1A;
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .task-due {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .task-due.overdue {
+      color: #ff4d4d;
+      font-weight: 700;
+    }
+    .task-due.soon {
+      color: #ffcc00;
+      font-weight: 600;
+    }
+
+    /* Modal */
+    .tb-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .tb-modal-overlay.open { display: flex; }
+    .tb-modal {
+      background: #235E36;
+      border: 1px solid #FAAFCC;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      padding: 16px;
+      color: #F9EBDC;
+    }
+    .tb-modal h2 { margin: 0 0 12px; font-size: 1.1rem; }
+    .tb-form-row { margin-bottom: 10px; }
+    .tb-form-row label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+      color: #FAAFCC;
+    }
+    .tb-form-row input,
+    .tb-form-row select,
+    .tb-form-row textarea {
+      width: 100%;
+      background: #1A1A1A;
+      color: #F9EBDC;
+      border: 1px solid #FAAFCC;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+    }
+    .tb-form-row textarea { min-height: 80px; resize: vertical; }
+    .tb-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    .tb-modal-actions button {
+      background: #235E36;
+      color: #F9EBDC;
+      border: 1px solid #FAAFCC;
+      border-radius: 6px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .tb-modal-actions button.primary {
+      background: #A8E10C;
+      color: #1A1A1A;
+      border-color: #A8E10C;
+      font-weight: 600;
+    }
+
+    /* Column-specific accents */
+    .task-column[data-status="todo"] .task-column-header { border-bottom-color: #FAAFCC; }
+    .task-column[data-status="in_progress"] .task-column-header { border-bottom-color: #A8E10C; }
+    .task-column[data-status="review"] .task-column-header { border-bottom-color: #ffcc00; }
+    .task-column[data-status="done"] .task-column-header { border-bottom-color: #4caf50; }
+  </style>
+</head>
+<body class="task-board-page">
+  <header class="task-board-header">
+    <h1>📋 Task Board</h1>
+    <div class="task-board-controls">
+      <select id="filter-assignee" aria-label="Filter by assignee">
+        <option value="">All assignees</option>
+      </select>
+      <button id="btn-add-task" class="primary">+ New Task</button>
+    </div>
+  </header>
+
+  <main class="task-board-columns" id="board">
+    <!-- Columns injected by JS -->
+  </main>
+
+  <!-- Add/Edit Task Modal -->
+  <div class="tb-modal-overlay" id="task-modal">
+    <div class="tb-modal">
+      <h2 id="modal-title">New Task</h2>
+      <div class="tb-form-row">
+        <label for="t-title">Title</label>
+        <input type="text" id="t-title" placeholder="Task title…" />
+      </div>
+      <div class="tb-form-row">
+        <label for="t-desc">Description</label>
+        <textarea id="t-desc" placeholder="Optional details…"></textarea>
+      </div>
+      <div class="tb-form-row">
+        <label for="t-assignee">Assignee</label>
+        <select id="t-assignee"></select>
+      </div>
+      <div class="tb-form-row">
+        <label for="t-priority">Priority</label>
+        <select id="t-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="tb-form-row">
+        <label for="t-status">Status</label>
+        <select id="t-status">
+          <option value="todo">Todo</option>
+          <option value="in_progress">In Progress</option>
+          <option value="review">Review</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="tb-form-row">
+        <label for="t-due">Due Date</label>
+        <input type="date" id="t-due" />
+      </div>
+      <div class="tb-modal-actions">
+        <button id="modal-cancel">Cancel</button>
+        <button id="modal-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/js/task-board.js"></script>
+</body>
+</html>
