@@ -105,7 +105,13 @@ async function _transcribe() {
 
     const data = await res.json();
     _transcript = data.text || '';
-    if (statusEl) statusEl.textContent = `${data.word_count || 0} words`;
+    if (statusEl) {
+      let statusText = `${data.word_count || 0} words`;
+      if (data.obsidian_saved) {
+        statusText += ' ✅ Saved to Obsidian';
+      }
+      statusEl.textContent = statusText;
+    }
     _updateUI();
   } catch (e) {
     console.error('Transcription error:', e);

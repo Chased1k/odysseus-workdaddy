@@ -9,6 +9,7 @@ import tempfile
 import logging
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,81 @@ def transcribe_audio(audio_bytes: bytes, provider: str = "auto", model_name: str
         return None
 
 
-# ── Model availability check ──
+# ── Obsidian auto-save ──
+
+# Obsidian vault path (mounted from host)
+OBSIDIAN_VAULT_DIR = os.environ.get("OBSIDIAN_VAULT_DIR", "/app/obsidian/chiron-brain")
+
+def save_transcript_to_obsidian(text: str, source: str = "voice-note", tags: list = None) -> dict:
+    """
+    Save a transcript to the Obsidian vault as a daily note entry.
+    
+    Creates/updates daily note file: daily/YYYY-MM-DD.md
+    Format: timestamp heading with transcript text + metadata.
+    
+    Args:
+        text: Transcribed text to save
+        source: Source label (e.g., "voice-note", "upload", "mic")
+        tags: Optional list of tags
+    
+    Returns:
+        dict with {saved: bool, path: str, message: str}
+    """
+    vault_path = Path(OBSIDIAN_VAULT_DIR)
+    if not vault_path.exists():
+        return {"saved": False, "path": "", "message": f"Obsidian vault not found: {vault_path}"}
+    
+    daily_dir = vault_path / "daily"
+    daily_dir.mkdir(parents=True, exist_ok=True)
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now().strftime("%H:%M:%S")
+    
+    daily_file = daily_dir / f"{today}.md"
+    
+    # Build entry
+    tag_str = ""
+    if tags:
+        tag_str = " " + " ".join(f"#{t}" for t in tags)
+    
+    entry = f"""## [{now}] Voice Transcript{tag_str}
+
+**Source:** {source}  
+**Characters:** {len(text)}
+
+{text}
+
+---
+
+"""
+    
+    try:
+        if daily_file.exists():
+            # Append to existing daily note
+            with open(daily_file, "a", encoding="utf-8") as f:
+                f.write(entry)
+        else:
+            # Create new daily note with frontmatter
+            header = f"""---
+date: {today}
+tags: [daily-note, voice-transcript{',' + ','.join(tags) if tags else ''}]
+---
+
+# Daily Note — {today}
+
+"""
+            with open(daily_file, "w", encoding="utf-8") as f:
+                f.write(header + entry)
+        
+        return {
+            "saved": True,
+            "path": str(daily_file.relative_to(vault_path)),
+            "message": f"Saved to {daily_file.name} at {now}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to save transcript to Obsidian: {e}")
+        return {"saved": False, "path": "", "message": str(e)}
+
 
 def get_available_models() -> list:
     """Return list of available whisper.cpp model files."""

@@ -149,6 +149,22 @@ async def transcribe(
             "word_count": len(text.split()),
         }
         
+        # ── Auto-save to Obsidian ──
+        try:
+            from services.transcription_service import save_transcript_to_obsidian
+            obsidian_result = save_transcript_to_obsidian(
+                text,
+                source="web-upload" if not playback else "web-voice",
+                tags=["voice-note", "work-daddy"]
+            )
+            response["obsidian_saved"] = obsidian_result.get("saved", False)
+            response["obsidian_path"] = obsidian_result.get("path", "")
+            if not obsidian_result.get("saved"):
+                logger.warning(f"Obsidian save failed: {obsidian_result.get('message')}")
+        except Exception as e:
+            logger.warning(f"Obsidian auto-save error: {e}")
+            response["obsidian_saved"] = False
+        
         # Audio playback is optional
         if playback:
             # Save audio for playback (optional feature)
