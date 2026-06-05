@@ -146,6 +146,14 @@ services:
       - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8092}
     restart: unless-stopped
 
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:latest
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared-config.yml:/etc/cloudflared/config.yml:ro
+      - ~/.cloudflared/5230938f-25db-4c72-b52b-1a0aa6332d31.json:/etc/cloudflared/5230938f-25db-4c72-b52b-1a0aa6332d31.json:ro
+    restart: unless-stopped
+
 volumes:
   searxng-data:
   chromadb-data:

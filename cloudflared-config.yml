@@ -1,0 +1,34 @@
+tunnel: 5230938f-25db-4c72-b52b-1a0aa6332d31
+credentials-file: /etc/cloudflared/5230938f-25db-4c72-b52b-1a0aa6332d31.json
+
+# WDFAB.IO tunnel ingress rules
+# Each hostname routes to a local service
+# Order matters — first match wins
+
+ingress:
+  # Work Daddy dev UI (Odysseus with Work Daddy theme)
+  - hostname: workdaddy-dev.wdfab.io
+    service: http://host.docker.internal:7002
+
+  # Hub / dashboards (original Odysseus)
+  - hostname: hub.wdfab.io
+    service: http://host.docker.internal:7001
+
+  # Fabio dev gateway (OpenClaw agent)
+  - hostname: fabio.wdfab.io
+    service: http://host.docker.internal:18790
+
+  # Static file server
+  - hostname: files.wdfab.io
+    service: http://host.docker.internal:8080
+
+  # Business Energetics Audit (Perri's)
+  - hostname: bea.wdfab.io
+    service: http://host.docker.internal:8765
+
+  # Health / Bartonella protocol
+  - hostname: health.wdfab.io
+    service: http://host.docker.internal:8082
+
+  # Fallback — 404 for unmatched hostnames
+  - service: http_status:404
