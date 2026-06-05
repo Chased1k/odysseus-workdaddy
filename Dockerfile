@@ -18,7 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     openssh-client \
     gosu \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install whisper.cpp for local transcription via pywhispercpp (bundles the binary)
+RUN pip install --no-cache-dir pywhispercpp==1.5.0
+# Also ensure whisper-cli binary is symlinked or available
+RUN python -c "import pywhispercpp; print(pywhispercpp.__file__)" || true
 
 WORKDIR /app
 
@@ -45,3 +51,15 @@ EXPOSE 7000
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7000"]
+
+# Build whisper.cpp from source for transcription
+RUN cd /tmp && \
+    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
+    cd whisper.cpp && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF && \
+    cmake --build build --config Release -j$(nproc) && \
+    cp build/bin/whisper-cli /usr/local/bin/whisper-cli && \
+    cp build/src/libwhisper.so* /usr/local/lib/ 2>/dev/null || true && \
+    cp build/ggml/src/libggml.so* /usr/local/lib/ 2>/dev/null || true && \
+    ldconfig 2>/dev/null || true && \
+    cd / && rm -rf /tmp/whisper.cpp

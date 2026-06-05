@@ -45,6 +45,7 @@ import taskBoardModule from './js/task-board.js';
 import agentCalendarModule from './js/calendar-agent.js';
 import * as memoryBrowserModule from './js/memory-browser.js';
 import * as chatTelegramModule from './js/chat-telegram.js';
+import * as transcriptionWidgetModule from './js/transcription-widget.js';
 import { initKeyboardShortcuts } from './js/keyboard-shortcuts.js';
 import { initSidebarLayout, syncRailSide } from './js/sidebar-layout.js';
 import { initSectionCollapse, initSectionDrag } from './js/section-management.js';
@@ -59,6 +60,7 @@ window.agentDashboardModule = agentDashboardModule;
 window.taskBoardModule = taskBoardModule;
 window.agentCalendarModule = agentCalendarModule;
 window.memoryBrowserModule = memoryBrowserModule;
+window.transcriptionWidgetModule = transcriptionWidgetModule;
 
 // Redirect to login on 401 from any fetch
 const _origFetch = window.fetch;
@@ -893,15 +895,15 @@ function initializeEventListeners() {
     });
   });
 
-  // Task Board button (sidebar)
-  const toolTaskBoardBtn = el('tool-task-board-btn');
-  if (toolTaskBoardBtn) {
-    toolTaskBoardBtn.addEventListener('click', () => {
+  // Task Board buttons (sidebar + rail)
+  const taskBoardBtns = [el('rail-task-board'), el('tool-task-board-btn')].filter(Boolean);
+  taskBoardBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
       if (taskBoardModule) {
         taskBoardModule.isTaskBoardOpen() ? taskBoardModule.closeTaskBoard() : taskBoardModule.openTaskBoard();
       }
     });
-  }
+  });
 
   // Memory Browser buttons (sidebar + rail)
   const memBrowserBtns = [el('rail-memory-browser'), el('tool-memory-browser-btn')].filter(Boolean);
@@ -945,6 +947,17 @@ function initializeEventListeners() {
 
   // Calendar tool button
   const toolCalendarBtn = el('tool-calendar-btn');
+
+  // Transcription widget button
+  const toolTranscriptionBtn = el('tool-transcription-btn');
+  const railTranscriptionBtn = el('rail-transcription');
+  [toolTranscriptionBtn, railTranscriptionBtn].filter(Boolean).forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (transcriptionWidgetModule) {
+        transcriptionWidgetModule.isTranscriptionOpen() ? transcriptionWidgetModule.closeTranscription() : transcriptionWidgetModule.openTranscription();
+      }
+    });
+  });
   if (toolCalendarBtn) {
     toolCalendarBtn.addEventListener('click', async () => {
       if (!calendarModule) return;
@@ -1100,6 +1113,7 @@ function initializeEventListeners() {
     '/calendar-agent': () => document.getElementById('tool-agent-calendar-btn')?.click(),
     '/taskboard': () => document.getElementById('tool-task-board-btn')?.click(),
     '/memorybrowser': () => document.getElementById('tool-memory-browser-btn')?.click(),
+    '/transcribe': () => document.getElementById('tool-transcription-btn')?.click(),
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
   };
   const _opener = _routeOpen[urlPath];
@@ -3523,7 +3537,9 @@ function startOdysseusApp() {
     'rail-archive':   'tool-library-btn',
     'rail-gallery':   'tool-gallery-btn',
     'rail-tasks':     'tool-tasks-btn',
+    'rail-task-board': 'tool-task-board-btn',
     'rail-chat':      'tool-chat-btn',
+    'rail-transcription': 'tool-transcription-btn',
     'rail-agents':    'tool-agents-btn',
     'rail-agent-calendar': 'tool-agent-calendar-btn',
     'rail-memory-browser': 'tool-memory-browser-btn',

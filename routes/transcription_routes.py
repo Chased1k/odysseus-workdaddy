@@ -30,7 +30,7 @@ async def list_models():
     models = []
     
     # Whisper.cpp models (available now)
-    for model_file in status["available_models"]:
+    for model_file in status["available_ggml_models"]:
         # Parse model name from file
         name = model_file.replace("ggml-", "").replace(".bin", "")
         models.append({

@@ -18,10 +18,6 @@ services:
       - ./data/local:/app/.local:z
       # Whisper.cpp models mounted from host
       - ~/.openclaw/models:/app/models:ro
-      # Whisper.cpp binary (symlink or mount)
-      - /usr/local/bin/whisper-cli:/usr/local/bin/whisper-cli:ro
-      - WHISPER_MODELS_DIR=/app/models
-      - WHISPER_CLI=/usr/local/bin/whisper-cli
     extra_hosts:
       # Lets the container reach local services on the Docker host, including
       # Ollama at http://host.docker.internal:11434.
@@ -59,6 +55,9 @@ services:
       - SERPER_API_KEY=${SERPER_API_KEY:-}
       # Linear Integration (Work Daddy Task Board)
       - LINEAR_API_KEY=${LINEAR_API_KEY:-}
+      # Whisper.cpp transcription integration
+      - WHISPER_MODELS_DIR=/app/models
+      - WHISPER_CLI=/usr/local/bin/whisper-cli
       # PUID / PGID — the user/group the container drops to before
       # running uvicorn (entrypoint also chowns /app/data + /app/logs
       # to match, so bind-mounted files stay editable from the host).

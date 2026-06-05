@@ -45,3 +45,4 @@ pytest
 pytest-asyncio
 faster-whisper
 ffmpeg-python
+pywhispercpp==1.5.0
